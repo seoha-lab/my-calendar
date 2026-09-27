@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db } from '@/lib/db';
+import { calendarService } from '@/lib/calendar';
 import { addDays, addHours } from 'date-fns';
 import { CalendarSource, Stage, Task } from '@/types';
 
@@ -50,14 +50,14 @@ export const useStore = create<State & Actions>((set, get) => ({
   },
 
   refresh: async () => {
-    const [tasks, calendars] = await Promise.all([db.listTasks(), db.listCalendars()]);
+    const [tasks, calendars] = await Promise.all([calendarService.listTasks(), calendarService.listCalendars()]);
     const map: Record<string, Task> = {};
     for (const t of tasks) {
       // Migrate any legacy 'in-progress' to 'todo'
       if ((t as any).stage === 'in-progress') {
         const migrated = { ...t, stage: 'todo' as Stage };
         map[t.id] = migrated;
-        void db.updateTask(t.id, { stage: 'todo' as Stage }).catch(() => {});
+        void calendarService.updateTask(t.id, { stage: 'todo' as Stage }).catch(() => {});
       } else {
         map[t.id] = t;
       }
@@ -73,19 +73,19 @@ export const useStore = create<State & Actions>((set, get) => ({
   toggleHideDone: () => { const v = !get().hideDone; set({ hideDone: v }); try { localStorage.setItem('clarity:hide-done', v ? '1' : '0'); } catch {} },
 
   createTask: async (input) => {
-    const task = await db.createTask(input as any);
+    const task = await calendarService.createTask(input);
     set((s) => ({ tasks: { ...s.tasks, [task.id]: task } }));
     return task;
   },
 
   updateTask: async (id, patch) => {
-    const t = await db.updateTask(id, patch);
+    const t = await calendarService.updateTask(id, patch);
     set((s) => ({ tasks: { ...s.tasks, [id]: t } }));
     return t;
   },
 
   deleteTask: async (id) => {
-    await db.deleteTask(id);
+    await calendarService.deleteTask(id);
     set((s) => {
       const copy = { ...s.tasks };
       delete copy[id];
@@ -134,7 +134,7 @@ export const useStore = create<State & Actions>((set, get) => ({
   },
 
   toggleCalendarEnabled: async (calendarId, enabled) => {
-    await db.toggleCalendarEnabled(calendarId, enabled);
+    await calendarService.toggleCalendarEnabled(calendarId, enabled);
     await get().refresh();
   },
 
@@ -145,6 +145,7 @@ export const useStore = create<State & Actions>((set, get) => ({
     const end = original.end ? addDays(new Date(original.end), 1) : (start ? addHours(start, 2) : undefined);
     const follow: Omit<Task, 'id' | 'createdAt' | 'updatedAt'> = {
       title: original.title,
+      category: original.category,
       description: original.description,
       stage: original.stage,
       checked: false,
@@ -171,17 +172,17 @@ export const useStore = create<State & Actions>((set, get) => ({
 
   // --- Ranges (timeline) ---
   addRange: async (taskId, input) => {
-    const t = await db.addRange(taskId, input);
+    const t = await calendarService.addRange(taskId, input);
     set((s) => ({ tasks: { ...s.tasks, [taskId]: t } }));
     return t;
   },
   updateRange: async (rangeId, patch) => {
-    const t = await db.updateRange(rangeId, patch);
+    const t = await calendarService.updateRange(rangeId, patch);
     set((s) => ({ tasks: { ...s.tasks, [t.id]: t } }));
     return t;
   },
   deleteRange: async (rangeId) => {
-    const t = await db.deleteRange(rangeId);
+    const t = await calendarService.deleteRange(rangeId);
     set((s) => ({ tasks: { ...s.tasks, [t.id]: t } }));
     return t;
   },

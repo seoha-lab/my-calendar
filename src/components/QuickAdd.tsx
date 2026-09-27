@@ -1,4 +1,6 @@
 'use client';
+import { t, interpolate } from '@/lib/i18n';
+
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { parseQuickInput, extractDateTimeHints, ParsedHint } from '@/lib/nlp';
 import { z } from 'zod';
@@ -6,6 +8,8 @@ import { useStore } from '@/store';
 import { toast } from '@/lib/toast';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
 import { Loader2, Trash2, Wand2, ListPlus, Plus } from 'lucide-react';
+import CategorySelect from './CategorySelect';
+import type { EventCategory } from '@/lib/calendar/categories';
 import DateTimePicker from '@/components/DateTimePicker';
 
 const schema = z.object({ title: z.string().min(1) });
@@ -14,6 +18,7 @@ type Props = { open: boolean; onClose: () => void; initialText?: string; initial
 
 export default function QuickAdd({ open, onClose, initialText = '', initialMode = 'quick' }: Props) {
   const [text, setText] = useState('');
+  const [category, setCategory] = useState<EventCategory>('other');
   const [error, setError] = useState<string | null>(null);
   const [hints, setHints] = useState<ParsedHint[]>([]);
   const [mode, setMode] = useState<'quick'|'notes'>('quick');
@@ -38,6 +43,7 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
   useEffect(() => {
     if (open) {
       setText(initialText || '');
+      setCategory('other');
       setMode(initialMode || 'quick');
       inputRef.current?.focus();
     }
@@ -82,7 +88,7 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
     }
     const parsed = schema.safeParse({ title: task.title ?? '' });
     if (!parsed.success) {
-      setError('Title required');
+      setError(t("Title required"));
       return;
     }
     try {
@@ -127,6 +133,7 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
 
       await createTask({
         title: task.title!,
+        category,
         description: task.description,
         stage: (task.stage ?? 'todo'),
         checked: task.checked ?? false,
@@ -140,7 +147,7 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
         subTasks: task.subTasks,
         calendarId: task.calendarId ?? 'local',
       } as any);
-      toast('Task created.');
+      toast(t("Task created."));
       setText('');
       onClose();
     } catch (err) {
@@ -167,6 +174,7 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
 
         {mode === 'quick' && (
           <form onSubmit={submit}>
+            <div className="mb-3"><CategorySelect value={category} onChange={setCategory} /></div>
             <div className="flex items-center gap-2">
               <div className="flex-1 relative">
                 {/* Highlights overlay (behind input text) */}
@@ -177,14 +185,13 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
                 />
                 {mode === 'quick' && (
                   <div aria-hidden className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 dark:text-gray-500 pointer-events-none hidden sm:block">
-                    Press Tab for Bulk Add
-                  </div>
+                    {t("Press Tab for Bulk Add")}</div>
                 )}
                 <input
                   ref={inputRef}
                   className="input"
-                  aria-label="Quick Add"
-                  placeholder='E.g., "Design review" tomorrow 2 PM !event'
+                  aria-label={t("Quick Add")}
+                  placeholder={t("E.g., \"Design review\" tomorrow 2 PM !event")}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => {
@@ -230,9 +237,9 @@ function DraftFromNotesInsideQuickAdd({ onClose, textAreaRef }: { onClose: () =>
   })();
 
   const analyze = async () => {
-    if (!notes.trim()) { setError('Paste some notes to analyze.'); return; }
+    if (!notes.trim()) { setError(t("Paste some notes to analyze.")); return; }
     const hasKey = (() => { try { return !!localStorage.getItem(LS_AI_KEY); } catch { return false; } })();
-    if (!hasKey) { toast('Add your Gemini API key in Settings'); setError('Missing AI key'); return; }
+    if (!hasKey) { toast(t("Add your Gemini API key in Settings")); setError(t("Missing AI key")); return; }
     setLoading(true);
     setError(null);
     try {
@@ -248,18 +255,18 @@ function DraftFromNotesInsideQuickAdd({ onClose, textAreaRef }: { onClose: () =>
         ] }),
       });
       const data = await resp.json();
-      if (!data?.ok) throw new Error(data?.error || 'AI request failed');
+      if (!data?.ok) throw new Error(data?.error || t("AI request failed"));
       const parsed = looseParseJSON(String(data.content || ''));
       const next = normalizeDraftItems(parsed);
       setItems(next);
       if (!next.length) setError('No tasks or events were identified.');
-    } catch (e) { setError((e as Error).message || 'Failed to analyze notes'); }
+    } catch (e) { setError((e as Error).message || t("Failed to analyze notes")); }
     finally { setLoading(false); }
   };
 
   const confirmCreate = async () => {
     const selected = items.filter((i) => i.title.trim());
-    if (!selected.length) { toast('Nothing to create.'); return; }
+    if (!selected.length) { toast(t("Nothing to create.")); return; }
     try {
       for (const it of selected) {
         const startEnd = normalizeStartEnd(it.start, it.end, !!it.allDay);
@@ -274,10 +281,10 @@ function DraftFromNotesInsideQuickAdd({ onClose, textAreaRef }: { onClose: () =>
           calendarId: defaultCalendarId,
         } as any);
       }
-      toast(`Created ${selected.length} ${selected.length === 1 ? 'task' : 'tasks'}.`);
+      toast(interpolate('createdCount', { count: selected.length }));
       await (refresh as any)();
       onClose();
-    } catch (e) { toast((e as Error).message || 'Failed to create tasks'); }
+    } catch (e) { toast((e as Error).message || t("Failed to create tasks")); }
   };
 
   return (
@@ -292,10 +299,10 @@ function DraftFromNotesInsideQuickAdd({ onClose, textAreaRef }: { onClose: () =>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
           <ListPlus className="w-4 h-4 text-blue-600" />
-          <span className="font-medium">Bulk Add</span>
-          <span className="text-gray-500 dark:text-gray-400">Paste items or notes</span>
+          <span className="font-medium">{t("Bulk Add")}</span>
+          <span className="text-gray-500 dark:text-gray-400">{t("Paste items or notes")}</span>
         </div>
-        <div className="text-xs text-gray-500">Cmd/Ctrl+Enter to preview or create</div>
+        <div className="text-xs text-gray-500">{t("Cmd/Ctrl+Enter to preview or create")}</div>
       </div>
       <div className="rounded-2xl border border-dashed border-gray-300 dark:border-slate-700 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900/80 dark:to-slate-900/60 shadow-inner backdrop-blur-md">
         <textarea
@@ -309,14 +316,14 @@ function DraftFromNotesInsideQuickAdd({ onClose, textAreaRef }: { onClose: () =>
           <div className="flex items-center justify-between">
             <NotesAIAccessHint />
             <button className="btn inline-flex items-center gap-2" onClick={analyze} disabled={loading}>
-              {loading ? (<><Loader2 className="w-4 h-4 animate-spin"/><span>Analyzing…</span></>) : (<><Wand2 className="w-4 h-4"/><span>Preview</span></>)}
+              {loading ? (<><Loader2 className="w-4 h-4 animate-spin"/><span>{t("Analyzing…")}</span></>) : (<><Wand2 className="w-4 h-4"/><span>{t("Preview")}</span></>)}
             </button>
           </div>
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       {items.length > 0 && (
         <div className="space-y-3 max-h-[50vh] overflow-auto pr-1">
           <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-300 px-1">
-            <span>{items.length} {items.length === 1 ? 'item' : 'items'} to create — remove any you don’t want.</span>
+            <span>{interpolate('draftCount', { count: items.length })}</span>
           </div>
           {items.map((it, idx) => (
             <DraftPreviewItem
@@ -329,7 +336,7 @@ function DraftFromNotesInsideQuickAdd({ onClose, textAreaRef }: { onClose: () =>
           ))}
           <div className="sticky bottom-0 pt-2">
             <div className="flex items-center justify-end rounded-xl px-3 py-2 bg-gradient-to-t from-white/90 to-transparent dark:from-slate-900/80">
-              <button className="btn" onClick={confirmCreate}>Create {items.length} {items.length === 1 ? 'task' : 'tasks'}</button>
+              <button className="btn" onClick={confirmCreate}>{interpolate('createCount', { count: items.length })}</button>
             </div>
           </div>
         </div>
@@ -348,13 +355,13 @@ function DraftPreviewItem({ item, setItem, index, onRemove }: { item: DraftItem;
       <div className="flex items-center gap-3 justify-between">
         <div className="flex items-center gap-3">
           <div className={`w-1.5 h-6 rounded-full ${item.isEvent ? 'bg-blue-500' : 'bg-emerald-500'}`} aria-hidden />
-          <input className="input h-12 text-[16px] font-medium" placeholder={item.isEvent ? 'Event title' : 'Task title'} value={item.title} onChange={(e)=>setItem({ ...item, title: e.target.value })} />
+          <input className="input h-12 text-[16px] font-medium" placeholder={item.isEvent ? t("Event title") : t("Task title")} value={item.title} onChange={(e)=>setItem({ ...item, title: e.target.value })} />
         </div>
         <div className="flex items-center gap-2 text-xs">
-          <label className="inline-flex items-center gap-1"><input type="checkbox" className="checkbox-circle" checked={item.isEvent} onChange={(e)=>setItem({ ...item, isEvent: e.target.checked })} /><span className="px-2 py-0.5 rounded-full border border-gray-300 dark:border-slate-600">Event</span></label>
-          <label className="inline-flex items-center gap-1"><input type="checkbox" className="checkbox-circle" checked={!!item.allDay} onChange={(e)=>setItem(adjustAllDay(item, e.target.checked))} /><span className="px-2 py-0.5 rounded-full border border-gray-300 dark:border-slate-600">All‑day</span></label>
+          <label className="inline-flex items-center gap-1"><input type="checkbox" className="checkbox-circle" checked={item.isEvent} onChange={(e)=>setItem({ ...item, isEvent: e.target.checked })} /><span className="px-2 py-0.5 rounded-full border border-gray-300 dark:border-slate-600">{t("Event")}</span></label>
+          <label className="inline-flex items-center gap-1"><input type="checkbox" className="checkbox-circle" checked={!!item.allDay} onChange={(e)=>setItem(adjustAllDay(item, e.target.checked))} /><span className="px-2 py-0.5 rounded-full border border-gray-300 dark:border-slate-600">{t("All‑day")}</span></label>
           {onRemove && (
-            <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label="Remove item" title="Remove item" onClick={onRemove}>
+            <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label={t("Remove item")} title={t("Remove item")} onClick={onRemove}>
               <Trash2 className="w-4 h-4"/>
             </button>
           )}
@@ -362,7 +369,7 @@ function DraftPreviewItem({ item, setItem, index, onRemove }: { item: DraftItem;
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
         <div>
-          <label className="text-sm text-gray-600 dark:text-gray-300">{item.allDay ? 'Date' : 'Start'}</label>
+          <label className="text-sm text-gray-600 dark:text-gray-300">{item.allDay ? t("Date") : t("Start")}</label>
           {item.allDay ? (
             <DateTimePicker className="mt-1" dateOnly value={item.start} onChange={(iso)=> setItem(normalizeAllDayRange({ ...item, start: iso }))} />
           ) : (
@@ -370,7 +377,7 @@ function DraftPreviewItem({ item, setItem, index, onRemove }: { item: DraftItem;
           )}
         </div>
         <div>
-          <label className="text-sm text-gray-600 dark:text-gray-300">{item.allDay ? 'End Date' : 'End'}</label>
+          <label className="text-sm text-gray-600 dark:text-gray-300">{item.allDay ? t("End Date") : t("End")}</label>
           {item.allDay ? (
             <DateTimePicker className="mt-1" dateOnly value={item.end} onChange={(iso)=> setItem(normalizeAllDayRange({ ...item, end: iso }))} />
           ) : (
@@ -379,8 +386,8 @@ function DraftPreviewItem({ item, setItem, index, onRemove }: { item: DraftItem;
         </div>
       </div>
       <div className="mt-3">
-        <label className="text-sm text-gray-600 dark:text-gray-300">Description</label>
-        <textarea ref={taRef} className="mt-1 resize-none w-full px-3 py-2 rounded-2xl bg-transparent border-0 outline-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600" rows={3} placeholder="Add details…" value={item.description || ''} onChange={(e)=>setItem({ ...item, description: e.target.value })} />
+        <label className="text-sm text-gray-600 dark:text-gray-300">{t("Description")}</label>
+        <textarea ref={taRef} className="mt-1 resize-none w-full px-3 py-2 rounded-2xl bg-transparent border-0 outline-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600" rows={3} placeholder={t("Add details…")} value={item.description || ''} onChange={(e)=>setItem({ ...item, description: e.target.value })} />
       </div>
       <DraftSubtasks item={item} setItem={setItem} />
     </div>
@@ -394,18 +401,18 @@ function DraftSubtasks({ item, setItem }: { item: DraftItem; setItem: (i: DraftI
   return (
     <div className="mt-2">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600 dark:text-gray-300">Subtasks</div>
-        <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label="Add subtask" title="Add subtask" onClick={add}><Plus className="w-4 h-4"/></button>
+        <div className="text-sm text-gray-600 dark:text-gray-300">{t("Subtasks")}</div>
+        <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label={t("Add subtask")} title={t("Add subtask")} onClick={add}><Plus className="w-4 h-4"/></button>
       </div>
       <div className="space-y-2 mt-2">
         {(item.subTasks || []).map((st) => (
           <div key={st.id} className="flex items-center gap-2">
             <input type="checkbox" className="checkbox-circle checkbox-xl" checked={st.done} onChange={(e)=>update(st.id, { done: e.target.checked })} />
             <input className="h-9 flex-1 px-3 rounded-xl bg-transparent border-0 outline-none appearance-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600" value={st.title} onChange={(e)=>update(st.id, { title: e.target.value })} />
-            <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label="Delete subtask" title="Delete subtask" onClick={()=>remove(st.id)}><Trash2 className="w-4 h-4"/></button>
+            <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label={t("Delete subtask")} title={t("Delete subtask")} onClick={()=>remove(st.id)}><Trash2 className="w-4 h-4"/></button>
           </div>
         ))}
-        {(item.subTasks || []).length === 0 && <div className="text-xs text-gray-500">No subtasks.</div>}
+        {(item.subTasks || []).length === 0 && <div className="text-xs text-gray-500">{t("No subtasks.")}</div>}
       </div>
     </div>
   );
@@ -414,7 +421,7 @@ function DraftSubtasks({ item, setItem }: { item: DraftItem; setItem: (i: DraftI
 function NotesAIAccessHint() {
   const [hasKey, setHasKey] = useState(false);
   useEffect(() => { try { setHasKey(!!localStorage.getItem(LS_AI_KEY)); } catch { setHasKey(false); } }, []);
-  return hasKey ? null : (<div className="text-xs text-gray-500">Add a Gemini API key in Settings.</div>);
+  return hasKey ? null : (<div className="text-xs text-gray-500">{t("Add a Gemini API key in Settings.")}</div>);
 }
 
 // Shared helpers

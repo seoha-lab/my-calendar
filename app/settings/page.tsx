@@ -1,5 +1,9 @@
 'use client';
+import { t, interpolate } from '@/lib/i18n';
+
 import { useEffect, useState } from 'react';
+import CalendarThemeSettings from '@/components/CalendarThemeSettings';
+import { normalizeCategory } from '@/lib/calendar/categories';
 import ExportModal from '@/components/ExportModal';
 import { useStore } from '@/store';
 import { toast } from '@/lib/toast';
@@ -36,7 +40,7 @@ export default function SettingsPage() {
         const header = rows.shift() || [];
         const idx = (name: string) => header.findIndex((h) => h.toLowerCase() === name);
         const titleIdx = idx('title');
-        if (titleIdx === -1) throw new Error('CSV must include a "title" column.');
+        if (titleIdx === -1) throw new Error(t("CSV must include a \"title\" column."));
         let created = 0;
         for (const r of rows) {
           const get = (n: string) => {
@@ -53,6 +57,7 @@ export default function SettingsPage() {
           const calendarId = get('calendarId') || 'local';
           await (createTask as any)({
             title,
+            category: normalizeCategory(get('category')),
             description: undefined,
             stage,
             checked,
@@ -67,10 +72,10 @@ export default function SettingsPage() {
           });
           created++;
         }
-        toast(`Imported ${created} tasks.`);
+        toast(interpolate('importedCount', { count: created }));
         await (refresh as any)();
       } catch (err) {
-        toast(`Import failed: ${(err as Error).message}`);
+        toast(interpolate('importFailed', { message: (err as Error).message }));
       }
       e.target.value = '';
     };
@@ -80,20 +85,21 @@ export default function SettingsPage() {
   return (
     <div className="py-6 space-y-4">
       <div className="px-1">
-        <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="text-sm text-gray-600 dark:text-gray-300">Configure AI, data, and integrations.</p>
+        <h1 className="text-xl font-semibold">{t("Settings")}</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-300">{t("Configure AI, data, and integrations.")}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <CalendarThemeSettings />
         {/* AI Assistant */}
         <section className="card p-4 space-y-3">
           <div>
-            <h2 className="font-medium flex items-center gap-2"><Bot className="w-4 h-4 text-gray-500" /> AI Assistant</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300">Choose a model and add your API key. Keys are stored locally and masked.</p>
+            <h2 className="font-medium flex items-center gap-2"><Bot className="w-4 h-4 text-gray-500" /> {t("AI Assistant")}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">{t("Choose a model and add your API key. Keys are stored locally and masked.")}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2"><Bot className="w-3.5 h-3.5" /> Model</span>
+              <span className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2"><Bot className="w-3.5 h-3.5" /> {t("Model")}</span>
               <select className="input" value={modelId} onChange={(e)=>{ const id = e.target.value; setModelId(id); try { setStoredAIModel(id); } catch {} }}>
                 {AI_MODEL_OPTIONS.map(opt => (
                   <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -101,24 +107,24 @@ export default function SettingsPage() {
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2"><Key className="w-3.5 h-3.5" /> API Key</span>
+              <span className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2"><Key className="w-3.5 h-3.5" /> {t("API Key")}</span>
               {!hasKey || editingKey ? (
                 <div className="flex gap-2">
-                  <input className="input flex-1" type="password" value={keyDraft} onChange={(e)=>setKeyDraft(e.target.value)} placeholder="Paste your Gemini API key" />
+                  <input className="input flex-1" type="password" value={keyDraft} onChange={(e)=>setKeyDraft(e.target.value)} placeholder={t("Paste your Gemini API key")} />
                   <button className="btn" onClick={()=>{
-                    if (!keyDraft.trim()) { toast('Enter a valid API key'); return; }
+                    if (!keyDraft.trim()) { toast(t("Enter a valid API key")); return; }
                     try { localStorage.setItem(LS_AI_KEY, keyDraft.trim()); } catch {}
                     setKeyDraft('');
                     setHasKey(true);
                     setEditingKey(false);
-                    toast('API key saved');
-                  }}>Save</button>
+                    toast(t("API key saved"));
+                  }}>{t("Save")}</button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <input className="input flex-1" type="password" value="••••••••••" disabled readOnly />
-                  <button className="btn" onClick={()=>{ setEditingKey(true); setKeyDraft(''); }}>Replace</button>
-                  <button className="btn" onClick={()=>{ try { localStorage.removeItem(LS_AI_KEY); } catch {}; setHasKey(false); setEditingKey(false); setAiTestState('idle'); toast('API key cleared'); }}>Clear</button>
+                  <button className="btn" onClick={()=>{ setEditingKey(true); setKeyDraft(''); }}>{t("Replace")}</button>
+                  <button className="btn" onClick={()=>{ try { localStorage.removeItem(LS_AI_KEY); } catch {}; setHasKey(false); setEditingKey(false); setAiTestState('idle'); toast(t("API key cleared")); }}>{t("Clear")}</button>
                 </div>
               )}
             </label>
@@ -149,27 +155,27 @@ export default function SettingsPage() {
         {/* Data */}
         <section className="card p-4 space-y-3">
           <div>
-            <h2 className="font-medium flex items-center gap-2"><Database className="w-4 h-4 text-gray-500" /> Data</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300">Export a backup or import tasks from CSV.</p>
+            <h2 className="font-medium flex items-center gap-2"><Database className="w-4 h-4 text-gray-500" /> {t("Data")}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">{t("Export a backup or import tasks from CSV.")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="btn" onClick={() => setExportOpen(true)}><Download className="w-4 h-4" /> Export…</button>
+            <button className="btn" onClick={() => setExportOpen(true)}><Download className="w-4 h-4" /> {t("Export…")}</button>
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onImport} />
-            <button className="btn" onClick={() => fileRef.current?.click()}><Upload className="w-4 h-4" /> Import CSV…</button>
+            <button className="btn" onClick={() => fileRef.current?.click()}><Upload className="w-4 h-4" /> {t("Import CSV…")}</button>
           </div>
-          <p className="text-xs text-gray-500">CSV must include a "title" column. Other columns are optional.</p>
+          <p className="text-xs text-gray-500">{t("CSV must include a &quot;title&quot; column. Other columns are optional.")}</p>
         </section>
 
         {/* Integrations */}
         <section className="card p-4 space-y-3 lg:col-span-2">
           <div>
-            <h2 className="font-medium flex items-center gap-2"><Plug className="w-4 h-4 text-gray-500" /> Integrations</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300">Connect external services.</p>
+            <h2 className="font-medium flex items-center gap-2"><Plug className="w-4 h-4 text-gray-500" /> {t("Integrations")}</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">{t("Connect external services.")}</p>
           </div>
           {isGoogleEnabled() ? (
-            <button className="btn" onClick={() => alert('Connect Google Calendar (beta) is not available in local mode.')}> <CalendarDays className="w-4 h-4"/> Connect Google Calendar (beta)</button>
+            <button className="btn" onClick={() => alert(t("Connect Google Calendar (beta) is not available in local mode."))}> <CalendarDays className="w-4 h-4"/> {t("Connect Google Calendar (beta)")}</button>
           ) : (
-            <p className="text-sm text-gray-500">Google Calendar integration appears disabled in this environment.</p>
+            <p className="text-sm text-gray-500">{t("Google Calendar integration appears disabled in this environment.")}</p>
           )}
         </section>
       </div>
@@ -218,7 +224,7 @@ function csvToRows(csv: string): string[][] {
 
 function TestButton({ hasKey, state, onClick }: { hasKey: boolean; state: 'idle'|'testing'|'ok'|'fail'; onClick: () => void }) {
   let cls = 'btn transition-all';
-  let label = 'Test connection';
+  let label = t("Test connection");
   let icon: JSX.Element | null = null;
 
   if (!hasKey) {
@@ -228,17 +234,17 @@ function TestButton({ hasKey, state, onClick }: { hasKey: boolean; state: 'idle'
   switch (state) {
     case 'testing':
       cls += ' btn-primary animate-pulse';
-      label = 'Testing…';
+      label = t("Testing…");
       icon = <Loader2 className="w-4 h-4 animate-spin" />;
       break;
     case 'ok':
       cls += ' bg-emerald-600 hover:bg-emerald-600/90 text-white border-transparent ring-2 ring-emerald-400/40';
-      label = 'Connected';
+      label = t("Connected");
       icon = <CheckCircle2 className="w-4 h-4" />;
       break;
     case 'fail':
       cls += ' bg-rose-600 hover:bg-rose-600/90 text-white border-transparent ring-2 ring-rose-400/40';
-      label = 'Try again';
+      label = t("Try again");
       icon = <XCircle className="w-4 h-4" />;
       break;
     default:

@@ -1,6 +1,7 @@
 /*
   DB Worker RPC client
 */
+import { normalizeCategory } from '@/lib/calendar/categories';
 import { Task, CalendarSource, Stage, TaskRange } from '@/types';
 
 type WorkerMsg =
@@ -68,6 +69,7 @@ function rowToTask(row: any): Task {
   return {
     id: String(row.id),
     title: String(row.title),
+    category: normalizeCategory(row.category),
     description: row.description ?? undefined,
     stage: row.stage as Stage,
     checked: !!row.checked,
@@ -95,6 +97,8 @@ function taskToDB(task: Partial<Task>): { cols: string[]; vals: unknown[]; place
   for (const [k, v] of Object.entries(task)) {
     if (v === undefined) continue;
     switch (k) {
+      case 'ranges': // Stored separately in task_ranges
+        break;
       case 'id':
         // id is handled separately
         break;
@@ -113,12 +117,12 @@ function taskToDB(task: Partial<Task>): { cols: string[]; vals: unknown[]; place
 }
 
 export const db = {
-  async createTask(task: Omit<Task, 'createdAt' | 'updatedAt'>): Promise<Task> {
+  async createTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
     await ensureReady();
     const now = new Date().toISOString();
-    const full: Task = { ...task, createdAt: now, updatedAt: now };
-    const { cols, vals, placeholders } = taskToDB(full);
     const id = crypto.randomUUID();
+    const full: Task = { ...task, id, createdAt: now, updatedAt: now };
+    const { cols, vals, placeholders } = taskToDB(full);
     cols.unshift('id');
     vals.unshift(id);
     placeholders.unshift('?');

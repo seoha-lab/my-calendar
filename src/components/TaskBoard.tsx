@@ -1,4 +1,6 @@
 'use client';
+import { t, interpolate } from '@/lib/i18n';
+
 import TaskCard from './TaskCard';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '@/store';
@@ -121,16 +123,16 @@ export default function TaskBoard() {
           await addRange(activeId, { start: startISO, end: endISO, allDay: !!task.allDay });
         }
       }}>
-        <Column tone="yellow" id="yesterday" title="Yesterday" icon={<Sunset className="w-4 h-4"/>} items={yesterday} onOpen={openDrawer} onToggle={toggleChecked} />
-        <Column tone="blue" id="today" title="Today" icon={<Sun className="w-4 h-4"/>} items={today} onOpen={openDrawer} onToggle={toggleChecked}
-          headerRight={<button className="btn btn-icon" aria-label="Quick Add" title="Quick Add" onClick={() => openQuickAdd('')}> <Plus className="w-4 h-4"/></button>} />
-        <Column tone="gray" id="tomorrow" title="Tomorrow" icon={<Sunrise className="w-4 h-4"/>} items={tomorrow} onOpen={openDrawer} onToggle={toggleChecked} />
-        <Column tone="rose" id="overdue" title="Overdue" icon={<AlertTriangle className="w-4 h-4"/>} items={overdue.slice().sort((a,b)=> {
+        <Column tone="yellow" id="yesterday" title={t("Yesterday")} icon={<Sunset className="w-4 h-4"/>} items={yesterday} onOpen={openDrawer} onToggle={toggleChecked} />
+        <Column tone="blue" id="today" title={t("Today")} icon={<Sun className="w-4 h-4"/>} items={today} onOpen={openDrawer} onToggle={toggleChecked}
+          headerRight={<button className="btn btn-icon" aria-label={t("Quick Add")} title={t("Quick Add")} onClick={() => openQuickAdd('')}> <Plus className="w-4 h-4"/></button>} />
+        <Column tone="gray" id="tomorrow" title={t("Tomorrow")} icon={<Sunrise className="w-4 h-4"/>} items={tomorrow} onOpen={openDrawer} onToggle={toggleChecked} />
+        <Column tone="rose" id="overdue" title={t("Overdue")} icon={<AlertTriangle className="w-4 h-4"/>} items={overdue.slice().sort((a,b)=> {
             const cmp = overdueAsc ? (new Date(a.end||a.start||0).getTime())-(new Date(b.end||b.start||0).getTime()) : (new Date(b.end||b.start||0).getTime())-(new Date(a.end||a.start||0).getTime());
             if (!!a.checked !== !!b.checked) return a.checked ? 1 : -1;
             return cmp;
           })} onOpen={openDrawer} onToggle={toggleChecked}
-          headerRight={<button className="btn btn-icon" aria-label="Toggle sort" title={overdueAsc ? 'Ascending' : 'Descending'} onClick={() => setOverdueAsc((v)=>!v)}><ArrowUpDown className="w-4 h-4"/></button>} />
+          headerRight={<button className="btn btn-icon" aria-label={t("Toggle sort")} title={overdueAsc ? t("Ascending") : t("Descending")} onClick={() => setOverdueAsc((v)=>!v)}><ArrowUpDown className="w-4 h-4"/></button>} />
         <TaskDetailsDrawer open={drawerOpen} taskId={drawerTask} highlightRangeId={drawerHighlightRangeId} onClose={() => { setDrawerOpen(false); setDrawerHighlightRangeId(undefined); }} />
       </DndContext>
     </div>
@@ -172,7 +174,7 @@ function Column({ id, title, items, onToggle, onOpen, tone, headerRight, icon }:
   }, []);
   const openAdd = () => { openQuickAdd(''); };
   return (
-    <div ref={setNodeRef} className={`rounded-2xl h-full max-h-full overflow-hidden flex flex-col border ${cls.border} ${cls.bg} ${isOver ? 'ring-2 ring-blue-400' : ''}`} aria-label={`${title} column`}>
+    <div ref={setNodeRef} className={`rounded-2xl h-full max-h-full overflow-hidden flex flex-col border ${cls.border} ${cls.bg} ${isOver ? 'ring-2 ring-blue-400' : ''}`} aria-label={interpolate('columnLabel', { title })}>
       {/* Fixed header (outside scroller) ensures perfect alignment across columns */}
       <div className={`px-3 h-12 flex items-center justify-between ${cls.headerBg} ${scrolled ? `shadow-sm border-b ${cls.headerBorder}` : ''} backdrop-blur supports-[backdrop-filter]:bg-white/40 dark:supports-[backdrop-filter]:bg-slate-900/30`}>
         <h3 className="font-semibold flex items-center gap-2">{icon}{title}</h3>
@@ -191,8 +193,7 @@ function Column({ id, title, items, onToggle, onOpen, tone, headerRight, icon }:
             <div className="space-y-2 pt-1">
               {items.length === 0 && (
                 <div className="card px-3 py-6 text-center text-xs text-gray-500 dark:text-gray-400 border border-dashed dark:border-slate-600">
-                  No tasks here.
-                </div>
+                  {t("No tasks here.")}</div>
               )}
               <SortableContext items={items.map((x) => x.id)} strategy={verticalListSortingStrategy} id={`column:${id}`}>
                 {items.map((t) => (

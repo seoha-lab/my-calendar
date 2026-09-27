@@ -504,3 +504,32 @@ input[type="datetime-local"].input::-webkit-calendar-picker-indicator { opacity:
 .dtp-suggest-item:hover, .dtp-suggest-item.is-active { background: rgba(59,130,246,0.12); }
 .dark .dtp-suggest-item { color: #e5e7eb; }
 .dark .dtp-suggest-item:hover, .dark .dtp-suggest-item.is-active { background: rgba(59,130,246,0.22); }
+
+/* Category colors are render-only. Both palettes use contrast against opaque backgrounds. */
+.fc .fc-event-minimal[class*="category-"], .dark .fc .fc-event-minimal[class*="category-"] {
+  background: var(--category-bg) !important;
+  color: var(--category-text) !important;
+  border: 0 !important;
+  border-left: 3px solid var(--category-accent) !important;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.fc .fc-event-minimal.fc-event-has-multi { border-left-style: double !important; border-left-width: 5px !important; }
+.fc .fc-event-minimal[class*="category-"] .fc-event-main,
+.fc .fc-event-minimal[class*="category-"] .fc-event-time,
+.fc .fc-event-minimal[class*="category-"] .fc-event-footer { color: var(--category-text) !important; }
+.category-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.75rem; padding: 0.15rem 0.4rem; border-radius: 0.3rem; background: var(--category-bg); color: var(--category-text); white-space: nowrap; }
+.category-dot { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--category-accent); }
+@media (max-width: 640px) {
+  .fc .fc-header-toolbar { flex-wrap: wrap; gap: 0.5rem; }
+  .fc .fc-toolbar-title { font-size: 1.1rem; }
+  .fc .fc-button { padding: 0.3rem 0.45rem; font-size: 0.8rem; }
+}
+
+.fc .fc-button { white-space: nowrap; }
+@media (max-width: 767px) {
+  .fc .fc-header-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .fc .fc-toolbar-chunk:nth-child(2) { order: -1; width: 100%; text-align: center; }
+  .fc .fc-toolbar-title { font-size: 1.15rem; line-height: 1.5; }
+  .fc .fc-button { padding: 4px 8px !important; height: 36px !important; }
+}

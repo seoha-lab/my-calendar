@@ -1,4 +1,6 @@
 'use client';
+import { t } from '@/lib/i18n';
+
 import { useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import { buildCSV, buildICS, downloadCSV, downloadICS, filenameDateStamp } from '@/lib/export';
@@ -41,26 +43,26 @@ export default function ExportModal({ open, onClose }: Props) {
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/30 flex items-start justify-center p-4">
       <div className="card w-full max-w-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">Export</h3>
-          <button className="btn" onClick={onClose}>Close</button>
+          <h3 className="font-semibold">{t("Export")}</h3>
+          <button className="btn" onClick={onClose}>{t("Close")}</button>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-sm text-gray-600 dark:text-gray-300">From</label>
+            <label className="text-sm text-gray-600 dark:text-gray-300">{t("From")}</label>
             <DateTimePicker className="mt-1" value={from} onChange={setFrom} />
           </div>
           <div>
-            <label className="text-sm text-gray-600 dark:text-gray-300">To</label>
+            <label className="text-sm text-gray-600 dark:text-gray-300">{t("To")}</label>
             <DateTimePicker className="mt-1" value={to} onChange={setTo} />
           </div>
         </div>
         <div className="flex items-center gap-4 mt-3 text-sm">
-          <label className="inline-flex items-center gap-2"><input className="checkbox-circle" type="checkbox" checked={includeTodos} onChange={(e) => setIncludeTodos(e.target.checked)} />Include tasks (VTODO)</label>
-          <label className="inline-flex items-center gap-2"><input className="checkbox-circle" type="checkbox" checked={includeEvents} onChange={(e) => setIncludeEvents(e.target.checked)} />Include events (VEVENT)</label>
+          <label className="inline-flex items-center gap-2"><input className="checkbox-circle" type="checkbox" checked={includeTodos} onChange={(e) => setIncludeTodos(e.target.checked)} />{t("Include tasks (VTODO)")}</label>
+          <label className="inline-flex items-center gap-2"><input className="checkbox-circle" type="checkbox" checked={includeEvents} onChange={(e) => setIncludeEvents(e.target.checked)} />{t("Include events (VEVENT)")}</label>
         </div>
         <div className="mt-4 flex gap-2">
-          <button className="btn" onClick={exportCSV}>Download CSV</button>
-          <button className="btn-primary" onClick={exportICS}>Download ICS</button>
+          <button className="btn" onClick={exportCSV}>{t("Download CSV")}</button>
+          <button className="btn-primary" onClick={exportICS}>{t("Download ICS")}</button>
         </div>
       </div>
     </div>

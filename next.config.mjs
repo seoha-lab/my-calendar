@@ -1,13 +1,20 @@
 import withSerwist from "@serwist/next";
 import { fileURLToPath } from "url";
 import path from "path";
+import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// A fresh revision per build prevents stale HTML referencing old chunks.
+const shellRevision = randomUUID();
 const withSW = withSerwist({
   swSrc: "src/sw.ts",
   swDest: "public/sw.js",
   register: true,
+  additionalPrecacheEntries: [
+    { url: "/", revision: shellRevision },
+    { url: "/settings", revision: shellRevision },
+  ],
   scope: "/",
   disable: process.env.NODE_ENV === "development",
 });

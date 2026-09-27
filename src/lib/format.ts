@@ -1,5 +1,7 @@
+import { t } from '@/lib/i18n';
 import { Task } from '@/types';
-import { format, parseISO, isSameDay } from 'date-fns';
+import { format } from '@/lib/i18n/date';
+import { parseISO, isSameDay } from 'date-fns';
 
 export function timeBadge(task: Task, opts?: { fullDate?: boolean }): string | null {
   let startISO = task.start;
@@ -21,7 +23,7 @@ export function timeBadge(task: Task, opts?: { fullDate?: boolean }): string | n
     const s = parseISO(startISO);
     const e = parseISO(endISO);
     const full = !!(opts?.fullDate);
-    if (allDayEffective) return full ? `${format(s, 'MMM d')} (All‑day)` : 'All‑day';
+    if (allDayEffective) return full ? `${format(s, 'MMM d')} (${t('All‑day')})` : t('All‑day');
     if (isSameDay(s, e)) {
       return full ? `${format(s, 'MMM d, p')} – ${format(e, 'p')}` : `${format(s, 'p')} – ${format(e, 'p')}`;
     }

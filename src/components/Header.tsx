@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import Link from 'next/link';
 import { CalendarDays, Settings, Plus, Search, Sun, Moon, Eye, EyeOff, Sparkles } from 'lucide-react';
 import React from 'react';
@@ -48,8 +49,8 @@ export default function Header({ onQuickAdd }: Props) {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search tasks…"
-              aria-label="Search tasks"
+              placeholder={t("Search tasks…")}
+              aria-label={t("Search tasks")}
               className="outline-none text-sm placeholder:text-gray-400 bg-transparent text-current w-full min-w-0"
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
@@ -57,22 +58,22 @@ export default function Header({ onQuickAdd }: Props) {
             />
             <button
               className="btn btn-ghost h-8 px-2 -mr-1"
-              aria-label="Ask AI"
-              title="Ask AI about your tasks"
+              aria-label={t("Ask AI")}
+              title={t("Ask AI about your tasks")}
               onClick={() => { if (search.trim()) setAiOpen(true); }}
             >
               <Sparkles className="w-4 h-4 text-blue-600" />
             </button>
           </div>
-          <button className="btn btn-icon btn-ghost" aria-label={hideDone ? 'Show done' : 'Hide done'} title={hideDone ? 'Show Done' : 'Hide Done'} onClick={toggleHideDone}>
+          <button className="btn btn-icon btn-ghost" aria-label={hideDone ? t("Show done") : t("Hide done")} title={hideDone ? t("Show Done") : t("Hide Done")} onClick={toggleHideDone}>
             {hideDone ? <Eye className="w-4 h-4"/> : <EyeOff className="w-4 h-4"/>}
           </button>
-          <button className="btn btn-icon btn-ghost" aria-label="Toggle theme" title="Toggle theme"
+          <button className="btn btn-icon btn-ghost" aria-label={t("Toggle theme")} title={t("Toggle theme")}
             onClick={() => { applyTheme('toggle'); try { setIsDark(document.documentElement.classList.contains('dark')); } catch {} }}>
             {isDark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
-          <button className="btn btn-icon btn-primary" onClick={onQuickAdd} aria-label="Open Quick Add (Cmd/Ctrl+K)" title="Quick Add"><Plus className="w-4 h-4"/></button>
-          <Link href="/settings" className="btn btn-icon btn-ghost" aria-label="Settings" title="Settings"><Settings className="w-4 h-4"/></Link>
+          <button className="btn btn-icon btn-primary" onClick={onQuickAdd} aria-label={t("Open Quick Add (Cmd/Ctrl+K)")} title={t("Quick Add")}><Plus className="w-4 h-4"/></button>
+          <Link href="/settings" className="btn btn-icon btn-ghost" aria-label={t("Settings")} title={t("Settings")}><Settings className="w-4 h-4"/></Link>
         </div>
       </div>
       <AISearchPanel open={aiOpen} query={search} onClose={() => setAiOpen(false)} />

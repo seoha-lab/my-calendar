@@ -1,11 +1,15 @@
 'use client';
+import { t, interpolate, relativeTime } from '@/lib/i18n';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '@/store';
 import { toast } from '@/lib/toast';
 import { Task, SubTask, Stage } from '@/types';
-import { format, isSameDay, isSameYear, isToday, isTomorrow, isYesterday, isWithinInterval, differenceInMinutes } from 'date-fns';
+import { format } from '@/lib/i18n/date';
+import { isSameDay, isSameYear, isToday, isTomorrow, isYesterday, isWithinInterval, differenceInMinutes } from 'date-fns';
 import { Trash2, Copy, X, Plus, Zap, Loader2 } from 'lucide-react';
+import CategorySelect from './CategorySelect';
 import DateTimePicker from '@/components/DateTimePicker';
 import { SUBTASKS_SYSTEM_PROMPT } from '@/lib/prompts';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
@@ -89,10 +93,10 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
 
   const remove = async () => {
     if (!task) return;
-    const ok = window.confirm('Delete this task? This action cannot be undone.');
+    const ok = window.confirm(t("Delete this task? This action cannot be undone."));
     if (!ok) return;
     await deleteTask(task.id);
-    toast('Task deleted.');
+    toast(t("Task deleted."));
     onClose();
   };
 
@@ -100,6 +104,7 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
     const copy = { ...task } as Task;
     const created = await createTask({
       title: copy.title + ' (copy)',
+      category: copy.category,
       description: copy.description,
       stage: copy.stage,
       checked: false,
@@ -113,7 +118,7 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
       subTasks: copy.subTasks,
       calendarId: copy.calendarId,
     } as any);
-    toast('Task duplicated.');
+    toast(t("Task duplicated."));
     onClose();
   };
 
@@ -180,29 +185,29 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">Task Details</h3>
+          <h3 className="font-semibold">{t("Task Details")}</h3>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 min-w-[60px] text-right">{saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ''}</span>
+            <span className="text-xs text-gray-500 min-w-[60px] text-right">{saving === 'saving' ? t("Saving…") : saving === 'saved' ? t("Saved") : ''}</span>
             <button
               className="btn btn-icon bg-transparent dark:bg-transparent border-gray-200 dark:border-slate-600 hover:bg-transparent dark:hover:bg-transparent"
-              aria-label="Duplicate task"
-              title="Duplicate"
+              aria-label={t("Duplicate task")}
+              title={t("Duplicate")}
               onClick={duplicate}
             >
               <Copy className="w-4 h-4" />
             </button>
             <button
               className="btn btn-icon bg-transparent dark:bg-transparent border-gray-200 dark:border-slate-600 text-red-600 hover:bg-transparent dark:hover:bg-transparent"
-              aria-label="Delete task"
-              title="Delete"
+              aria-label={t("Delete task")}
+              title={t("Delete")}
               onClick={remove}
             >
               <Trash2 className="w-4 h-4" />
             </button>
             <button
               className="btn btn-icon bg-transparent dark:bg-transparent border-gray-200 dark:border-slate-600 hover:bg-transparent dark:hover:bg-transparent"
-              aria-label="Close"
-              title="Close"
+              aria-label={t("Close")}
+              title={t("Close")}
               onClick={closeWithAnimation}
             >
               <X className="w-4 h-4" />
@@ -210,17 +215,17 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
           </div>
         </div>
         {!task || !local ? (
-          <div className="py-24 text-center text-sm text-gray-500">Loading…</div>
+          <div className="py-24 text-center text-sm text-gray-500">{t("Loading…")}</div>
         ) : (
         <div className="space-y-3">
           {/* Title + Done inline */}
           <div>
-            <label className="text-sm text-gray-600 dark:text-gray-300">Title</label>
+            <label className="text-sm text-gray-600 dark:text-gray-300">{t("Title")}</label>
             <div className="mt-1 flex items-center gap-3">
               <input
                 type="checkbox"
-                aria-label={local.checked ? 'Mark as not done' : 'Mark as done'}
-                title={local.checked ? 'Mark as not done' : 'Mark as done'}
+                aria-label={local.checked ? t("Mark as not done") : t("Mark as done")}
+                title={local.checked ? t("Mark as not done") : t("Mark as done")}
                 className="checkbox-circle checkbox-2xl"
                 checked={!!local.checked}
                 onChange={(e) => setLocal({ ...local, checked: e.target.checked, stage: e.target.checked ? 'done' : 'todo' })}
@@ -228,7 +233,7 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
               />
               <input
                 className={`h-10 flex-1 px-3 rounded-2xl bg-transparent border-0 outline-none appearance-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600 transition-colors ${local.checked ? 'line-through text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}
-                placeholder="Title"
+                placeholder={t("Title")}
                 value={local.title}
                 onChange={(e) => setLocal({ ...local, title: e.target.value })}
                 onKeyDown={(e) => {
@@ -241,12 +246,13 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
               />
             </div>
           </div>
+          <CategorySelect value={local.category} onChange={(category) => setLocal({ ...local, category })} />
           <DescriptionEditor value={local.description ?? ''} onChange={(v) => setLocal({ ...local, description: v })} />
           <RangesTimeline taskId={task.id} highlightRangeId={highlightRangeId} />
           <SubtasksEditor task={local} setTask={setLocal} />
           {linked.length > 0 && (
             <div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">Linked Tasks</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">{t("Linked Tasks")}</div>
               <ul className="list-disc ml-5 text-sm">
                 {linked.map((lt) => (<li key={lt.id}>{lt.title}</li>))}
               </ul>
@@ -318,7 +324,7 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
       const sameDay = isSameDay(s, e);
       const includeYear = !isSameYear(s, e);
       if (allDay) {
-        return format(s, includeYear ? 'EEE, MMM d, yyyy' : 'EEE, MMM d') + ' • All‑day';
+        return format(s, includeYear ? 'EEE, MMM d, yyyy' : 'EEE, MMM d') + ' • ' + t('All‑day');
       }
       if (sameDay) {
         const day = format(s, includeYear ? 'EEE, MMM d, yyyy' : 'EEE, MMM d');
@@ -333,14 +339,14 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
   // Relative time helper (Today/Tomorrow/Yesterday/in X)
   const now = new Date();
   const relativeShort = (d: Date): string => {
-    if (isToday(d)) return 'Today';
-    if (isTomorrow(d)) return 'Tomorrow';
-    if (isYesterday(d)) return 'Yesterday';
+    if (isToday(d)) return t("Today");
+    if (isTomorrow(d)) return t("Tomorrow");
+    if (isYesterday(d)) return t("Yesterday");
     const diffMs = d.getTime() - now.getTime();
     const future = diffMs > 0;
     const absMin = Math.max(1, Math.round(Math.abs(diffMs) / 60000));
-    const val = absMin < 60 ? `${absMin}m` : (absMin < 1440 ? `${Math.round(absMin / 60)}h` : `${Math.round(absMin / 1440)}d`);
-    return future ? `in ${val}` : `${val} ago`;
+    const value = absMin < 60 ? absMin : absMin < 1440 ? Math.round(absMin / 60) : Math.round(absMin / 1440);
+    return relativeTime(future ? value : -value, absMin < 60 ? 'minute' : absMin < 1440 ? 'hour' : 'day');
   };
 
 
@@ -382,13 +388,13 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
   return (
     <div className="min-w-0">
       <div className="flex items-center justify-between">
-        <label className="text-sm text-gray-600 dark:text-gray-300">Timeline</label>
+        <label className="text-sm text-gray-600 dark:text-gray-300">{t("Timeline")}</label>
         {!adding && (
           <button
             type="button"
             className="btn btn-ghost h-9 w-9 p-0 inline-flex items-center justify-center bg-transparent dark:bg-transparent dark:hover:bg-transparent border-0 dark:border-transparent"
-            aria-label="Add range"
-            title="Add range"
+            aria-label={t("Add range")}
+            title={t("Add range")}
             onClick={openAdd}
           >
             <Plus className="w-4 h-4" />
@@ -403,20 +409,19 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
             <div className="timeline-card card p-3">
               <div className="space-y-2">
                 <div>
-                  <label className="text-xs text-gray-500">From</label>
+                  <label className="text-xs text-gray-500">{t("From")}</label>
                   <DateTimePicker value={draftStart} onChange={setDraftStart} dateOnly={draftAllDay} />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">To</label>
+                  <label className="text-xs text-gray-500">{t("To")}</label>
                   <DateTimePicker value={draftEnd} onChange={setDraftEnd} dateOnly={draftAllDay} />
                 </div>
                 <label className="inline-flex items-center gap-2 text-xs">
                   <input type="checkbox" className="checkbox-circle" checked={!!draftAllDay} onChange={(e) => setDraftAllDay(e.target.checked)} />
-                  All‑day
-                </label>
+                  {t("All‑day")}</label>
                 <div className="flex items-center justify-end gap-2">
-                  <button type="button" className="btn btn-ghost h-8 px-3 text-xs" onClick={cancelAdd}>Cancel</button>
-                  <button type="button" className="btn h-8 px-3 text-xs" onClick={saveAdd}>Save</button>
+                  <button type="button" className="btn btn-ghost h-8 px-3 text-xs" onClick={cancelAdd}>{t("Cancel")}</button>
+                  <button type="button" className="btn h-8 px-3 text-xs" onClick={saveAdd}>{t("Save")}</button>
                 </div>
               </div>
             </div>
@@ -454,11 +459,11 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
                     <div className="text-sm min-w-0">
                       <div className="font-medium truncate">{fmtRange(r.start, r.end, r.allDay)}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {relativeShort(startDate)}{inProgress ? ` • ${Math.max(1, durationMin - elapsedMin)}m left` : ''}
+                        {relativeShort(startDate)}{inProgress ? ' • ' + interpolate('minutesLeft', { count: Math.max(1, durationMin - elapsedMin) }) : ''}
                       </div>
                     </div>
                     <div className="shrink-0 flex items-center gap-1">
-                      <button className="btn btn-ghost h-9 w-9 p-0 inline-flex items-center justify-center bg-transparent dark:bg-transparent dark:hover:bg-transparent border-0 dark:border-transparent" aria-label="Delete range" title="Delete range" onClick={async (e) => {
+                      <button className="btn btn-ghost h-9 w-9 p-0 inline-flex items-center justify-center bg-transparent dark:bg-transparent dark:hover:bg-transparent border-0 dark:border-transparent" aria-label={t("Delete range")} title={t("Delete range")} onClick={async (e) => {
                         e.stopPropagation();
                         if (r.id === 'primary') await updateTask(taskId, { start: undefined, end: undefined });
                         else await deleteRange(r.id);
@@ -470,14 +475,14 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
                 ) : (
                   <div className="space-y-2">
                     <div>
-                      <label className="text-xs text-gray-500">From</label>
+                      <label className="text-xs text-gray-500">{t("From")}</label>
                       <DateTimePicker value={r.start} onChange={async (iso) => {
                         if (r.id === 'primary') await updateTask(taskId, { start: iso });
                         else await updateRange(r.id, { start: iso });
                       }} dateOnly={!!r.allDay} />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500">To</label>
+                      <label className="text-xs text-gray-500">{t("To")}</label>
                       <DateTimePicker value={r.end} onChange={async (iso) => {
                         if (r.id === 'primary') await updateTask(taskId, { end: iso });
                         else await updateRange(r.id, { end: iso });
@@ -489,8 +494,7 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
                         if (r.id === 'primary') await updateTask(taskId, { allDay });
                         else await updateRange(r.id, { allDay });
                       }} />
-                      All‑day
-                    </label>
+                      {t("All‑day")}</label>
                     {/* Done button removed: click outside to close editing */}
                   </div>
                 )}
@@ -548,12 +552,12 @@ function DescriptionEditor({ value, onChange }: { value: string; onChange: (v: s
 
   return (
     <div>
-      <label className="text-sm text-gray-600 dark:text-gray-300">Description</label>
+      <label className="text-sm text-gray-600 dark:text-gray-300">{t("Description")}</label>
       <textarea
         ref={taRef}
         className="mt-1 resize-none h-24 w-full px-3 py-2 rounded-2xl bg-transparent border-0 outline-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600"
         rows={3}
-        placeholder="Add details…"
+        placeholder={t("Add details…")}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -682,16 +686,16 @@ function SubtasksEditor({ task, setTask }: { task: Task; setTask: (t: Task) => v
   return (
     <div>
       <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600 dark:text-gray-300">Subtasks</div>
+        <div className="text-sm text-gray-600 dark:text-gray-300">{t("Subtasks")}</div>
         <div className="flex items-center gap-2">
           <button
             className="btn btn-ghost h-9 w-9 p-0 inline-flex items-center justify-center bg-transparent dark:bg-transparent dark:hover:bg-transparent border-0 dark:border-transparent"
-            aria-label="Generate subtasks"
-            title="Generate subtasks from title & description"
+            aria-label={t("Generate subtasks")}
+            title={t("Generate subtasks from title & description")}
             onClick={async () => {
               if (genState === 'loading') return;
               const hasKey = (()=>{ try { return !!localStorage.getItem(LS_AI_KEY); } catch { return false; } })();
-              if (!hasKey) { toast('Add your Gemini API key in Settings'); return; }
+              if (!hasKey) { toast(t("Add your Gemini API key in Settings")); return; }
               try {
                 setGenState('loading');
                 const prev = measurePositions();
@@ -709,16 +713,16 @@ function SubtasksEditor({ task, setTask }: { task: Task; setTask: (t: Task) => v
                   ] }),
                 });
                 const data = await resp.json();
-                if (!data?.ok) throw new Error(data?.error || 'AI request failed');
+                if (!data?.ok) throw new Error(data?.error || t("AI request failed"));
                 const parsed = looseParseJSON(String(data.content || ''));
                 const arr: string[] = normalizeSubtaskList(parsed);
-                if (!arr.length) { toast('No new subtasks suggested'); return; }
+                if (!arr.length) { toast(t("No new subtasks suggested")); return; }
                 const existingLC = new Set((task.subTasks || []).map(s => s.title.trim().toLowerCase()));
                 const toAdd = arr
                   .map(t => t.trim())
                   .filter(Boolean)
                   .filter(t => !existingLC.has(t.toLowerCase()));
-                if (!toAdd.length) { toast('All suggested subtasks already exist'); return; }
+                if (!toAdd.length) { toast(t("All suggested subtasks already exist")); return; }
                 const next = [...(task.subTasks || [])];
                 const addedIds: string[] = [];
                 for (const title of toAdd) {
@@ -742,7 +746,7 @@ function SubtasksEditor({ task, setTask }: { task: Task; setTask: (t: Task) => v
                 });
                 toast(`Added ${toAdd.length} subtasks`);
               } catch (e) {
-                toast((e as Error).message || 'Generation failed');
+                toast((e as Error).message || t("Generation failed"));
               } finally {
                 setGenState('idle');
               }
@@ -750,7 +754,7 @@ function SubtasksEditor({ task, setTask }: { task: Task; setTask: (t: Task) => v
           >
             {genState === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
           </button>
-          <button className="btn btn-ghost h-9 w-9 p-0 inline-flex items-center justify-center bg-transparent dark:bg-transparent dark:border-transparent" aria-label="Add subtask" title="Add subtask" onClick={add}>
+          <button className="btn btn-ghost h-9 w-9 p-0 inline-flex items-center justify-center bg-transparent dark:bg-transparent dark:border-transparent" aria-label={t("Add subtask")} title={t("Add subtask")} onClick={add}>
             <Plus className="w-4 h-4" />
           </button>
         </div>
@@ -761,7 +765,7 @@ function SubtasksEditor({ task, setTask }: { task: Task; setTask: (t: Task) => v
           return (
             <div key={st.id} data-subtask-id={st.id} className="flex items-center gap-2">
               <input
-                aria-label={`Mark subtask '${st.title || 'Untitled'}' as ${st.done ? 'not done' : 'done'}`}
+                aria-label={interpolate("subtaskToggle", { title: st.title || t("Untitled"), state: st.done ? t("Mark as not done") : t("Mark as done") })}
                 type="checkbox"
                 className="checkbox-circle checkbox-xl"
                 checked={st.done}
@@ -778,7 +782,7 @@ function SubtasksEditor({ task, setTask }: { task: Task; setTask: (t: Task) => v
                   }
                 }}
               />
-              <button className="btn btn-ghost h-9 w-9 p-0 inline-flex items-center justify-center bg-transparent dark:bg-transparent dark:hover:bg-transparent border-0 dark:border-transparent" aria-label="Delete subtask" title="Delete subtask" onClick={() => remove(st.id)}>
+              <button className="btn btn-ghost h-9 w-9 p-0 inline-flex items-center justify-center bg-transparent dark:bg-transparent dark:hover:bg-transparent border-0 dark:border-transparent" aria-label={t("Delete subtask")} title={t("Delete subtask")} onClick={() => remove(st.id)}>
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -806,6 +810,7 @@ function fromLocalDT(s: string): string | undefined {
 function sanitize(t: Task): Partial<Task> {
   return {
     title: t.title?.trim(),
+    category: t.category,
     description: t.description?.trim() || undefined,
     stage: t.stage,
     checked: !!t.checked,

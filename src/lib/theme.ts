@@ -10,7 +10,7 @@ export function getStoredTheme(): Theme | null {
 
 export function resolveTheme(pref?: Theme): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'light';
-  const stored = pref ?? getStoredTheme() ?? 'system';
+  const stored = pref ?? getStoredTheme() ?? 'light';
   if (stored === 'light' || stored === 'dark') return stored;
   try {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -23,7 +23,7 @@ import { setAppBackgroundByDate } from '@/lib/app-background';
 
 export function applyTheme(next: Theme | 'toggle') {
   if (typeof document === 'undefined') return;
-  let current: Theme = getStoredTheme() ?? 'system';
+  let current: Theme = getStoredTheme() ?? 'light';
   let target: Theme;
   if (next === 'toggle') {
     // Toggle explicitly between light and dark (ignore system)
@@ -63,5 +63,5 @@ function monthIndexFromDate(d: Date): string {
 
 // Inline-friendly function to run as early as possible
 export function inlineInitThemeScript(): string {
-  return `(() => { try {\n    const key = '${STORAGE_KEY}';\n    let pref = localStorage.getItem(key);\n    if (pref !== 'light' && pref !== 'dark' && pref !== 'system') pref = 'system';\n    const sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;\n    const eff = (pref === 'dark' || (pref === 'system' && sysDark)) ? 'dark' : 'light';\n    document.documentElement.classList.toggle('dark', eff === 'dark');\n    document.documentElement.style.colorScheme = eff;\n  } catch {} })();`;
+  return `(() => { try {\n    const key = '${STORAGE_KEY}';\n    let pref = localStorage.getItem(key);\n    if (pref !== 'light' && pref !== 'dark' && pref !== 'system') pref = 'light';\n    const sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;\n    const eff = (pref === 'dark' || (pref === 'system' && sysDark)) ? 'dark' : 'light';\n    document.documentElement.classList.toggle('dark', eff === 'dark');\n    document.documentElement.style.colorScheme = eff;\n  } catch {} })();`;
 }

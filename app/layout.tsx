@@ -6,7 +6,7 @@ import React from 'react';
 
 export const metadata: Metadata = {
   title: 'Clarity',
-  description: 'Local-first Calendar + To-Do',
+  description: '오프라인으로 사용하는 개인 일정과 할 일',
   manifest: '/manifest.webmanifest',
   themeColor: [
     { media: '(prefers-color-scheme: dark)', color: '#0b1730' },
@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const initialBg = `/backgrounds/rich/month-${monthIdx}.svg`;
   const initialBgDark = `/backgrounds/rich-dark/month-${monthIdx}.svg`;
   return (
-    <html lang="en" suppressHydrationWarning style={{ ['--clarity-app-bg' as any]: `url(${initialBg})` }}>
+    <html lang="ko" suppressHydrationWarning style={{ ['--clarity-app-bg' as any]: `url(${initialBg})` }}>
       <body className="min-h-screen">
         {/* Global app background overlay */}
         <div id="app-bg" className="app-bg" style={{ backgroundImage: 'var(--clarity-app-bg)' }} />

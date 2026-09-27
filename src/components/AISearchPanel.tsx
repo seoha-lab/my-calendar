@@ -1,4 +1,6 @@
 'use client';
+import { t } from '@/lib/i18n';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
@@ -50,7 +52,7 @@ export default function AISearchPanel({ open, query, onClose }: Props) {
       try {
         const apiKey = (() => { try { return localStorage.getItem(LS_AI_KEY) || ''; } catch { return ''; } })();
         const model = (() => { try { return localStorage.getItem(LS_AI_MODEL) || DEFAULT_MODEL_ID; } catch { return DEFAULT_MODEL_ID; } })();
-        if (!apiKey) { setError('Add a Gemini API key in Settings.'); setLoading(false); return; }
+        if (!apiKey) { setError(t("Add a Gemini API key in Settings.")); setLoading(false); return; }
         const now = new Date().toISOString();
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
         const sys = SYSTEM_PROMPT;
@@ -64,7 +66,7 @@ export default function AISearchPanel({ open, query, onClose }: Props) {
           ] }),
         });
         const data = await resp.json();
-        if (!data?.ok) throw new Error(data?.error || 'AI request failed');
+        if (!data?.ok) throw new Error(data?.error || t("AI request failed"));
         const parsed = looseParseJSON(String(data.content || ''));
         const normalized = normalizeResult(parsed);
         if (!normalized) {
@@ -95,15 +97,15 @@ export default function AISearchPanel({ open, query, onClose }: Props) {
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/40 dark:bg-black/60 backdrop-blur-sm flex items-start justify-center p-4" onClick={onClose}>
       <div className="card w-full max-w-3xl p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold">AI Search</h3>
-          <button className="btn" onClick={onClose}>Close</button>
+          <h3 className="font-semibold">{t("AI Search")}</h3>
+          <button className="btn" onClick={onClose}>{t("Close")}</button>
         </div>
 
-        <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">Query: <span className="font-medium">{query || '—'}</span></div>
+        <div className="text-sm text-gray-600 dark:text-gray-300 mb-2">{t("Query:")}<span className="font-medium">{query || '—'}</span></div>
 
         {loading && (
           <div className="p-6 text-center text-sm text-gray-600 dark:text-gray-300">
-            <div className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/>Analyzing…</div>
+            <div className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/>{t("Analyzing…")}</div>
           </div>
         )}
 
@@ -143,7 +145,7 @@ export default function AISearchPanel({ open, query, onClose }: Props) {
 function TaskList({ ids }: { ids: string[] }) {
   const tasks = useStore((s) => s.tasks);
   const items = ids.map((id) => tasks[id]).filter(Boolean);
-  if (!items.length) return <div className="text-sm text-gray-500">No matching tasks.</div>;
+  if (!items.length) return <div className="text-sm text-gray-500">{t("No matching tasks.")}</div>;
   return (
     <div className="space-y-2">
       {items.map((t) => (
@@ -164,9 +166,9 @@ function renderWhen(start?: string, end?: string, allDay?: boolean) {
     const s = start ? new Date(start) : null;
     const e = end ? new Date(end) : null;
     if (allDay && s) return <span>{' • '}{s.toDateString()}</span>;
-    if (s && e) return <span>{' • '}{s.toLocaleString()} – {e.toLocaleTimeString()}</span>;
-    if (s) return <span>{' • '}{s.toLocaleString()}</span>;
-    if (e) return <span>{' • '}due {e.toLocaleString()}</span>;
+    if (s && e) return <span>{' • '}{s.toLocaleString('ko-KR')} – {e.toLocaleTimeString('ko-KR')}</span>;
+    if (s) return <span>{' • '}{s.toLocaleString('ko-KR')}</span>;
+    if (e) return <span>{' • '}마감 {e.toLocaleString('ko-KR')}</span>;
   } catch {}
   return null;
 }

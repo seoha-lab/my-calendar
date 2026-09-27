@@ -1,4 +1,6 @@
 'use client';
+import { t, interpolate } from '@/lib/i18n';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@/store';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
@@ -48,9 +50,9 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
   }, [open]);
 
   const analyze = async () => {
-    if (!notes.trim()) { setError('Paste some notes to analyze.'); return; }
+    if (!notes.trim()) { setError(t("Paste some notes to analyze.")); return; }
     const hasKey = (() => { try { return !!localStorage.getItem(LS_AI_KEY); } catch { return false; } })();
-    if (!hasKey) { toast('Add your Gemini API key in Settings'); setError('Missing AI key'); return; }
+    if (!hasKey) { toast(t("Add your Gemini API key in Settings")); setError(t("Missing AI key")); return; }
     setLoading(true);
     setError(null);
     try {
@@ -69,7 +71,7 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
         ] }),
       });
       const data = await resp.json();
-      if (!data?.ok) throw new Error(data?.error || 'AI request failed');
+      if (!data?.ok) throw new Error(data?.error || t("AI request failed"));
       const parsed = looseParseJSON(String(data.content || ''));
       const next = normalizeDraftItems(parsed);
       if (!next.length) {
@@ -81,7 +83,7 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
       setItems(next);
       setView('preview');
     } catch (e) {
-      setError((e as Error).message || 'Failed to analyze notes');
+      setError((e as Error).message || t("Failed to analyze notes"));
     } finally {
       setLoading(false);
     }
@@ -89,7 +91,7 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
 
   const confirmCreate = async () => {
     const selected = items.filter((i) => i.title.trim());
-    if (!selected.length) { toast('Nothing to create.'); return; }
+    if (!selected.length) { toast(t("Nothing to create.")); return; }
     try {
       for (const it of selected) {
         const startEnd = normalizeStartEnd(it.start, it.end, !!it.allDay);
@@ -109,11 +111,11 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
           calendarId: defaultCalendarId,
         } as any);
       }
-      toast(`Created ${selected.length} ${selected.length === 1 ? 'task' : 'tasks'}.`);
+      toast(interpolate('createdCount', { count: selected.length }));
       await (refresh as any)();
       onClose();
     } catch (e) {
-      toast((e as Error).message || 'Failed to create tasks');
+      toast((e as Error).message || t("Failed to create tasks"));
     }
   };
 
@@ -128,13 +130,13 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/40 dark:bg-black/60 backdrop-blur-sm flex items-start justify-center p-4" onClick={onClose}>
       <div className="card w-full max-w-3xl p-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold">Bulk Add</h3>
-          <button className="btn" onClick={onClose}>Close</button>
+          <h3 className="font-semibold">{t("Bulk Add")}</h3>
+          <button className="btn" onClick={onClose}>{t("Close")}</button>
         </div>
 
         {view === 'input' && (
           <div className="space-y-3">
-            <p className="text-sm text-gray-600 dark:text-gray-300">Bulk Add: Paste items or notes. I’ll detect tasks, events, deadlines, and subtasks.</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300">{t("Bulk Add: Paste items or notes. I’ll detect tasks, events, deadlines, and subtasks.")}</p>
             <div className="rounded-2xl border border-dashed border-gray-300 dark:border-slate-700 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900/80 dark:to-slate-900/60 shadow-inner backdrop-blur-md">
               <textarea
                 className="w-full h-48 resize-y px-3 py-2 rounded-2xl bg-transparent border-0 outline-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600"
@@ -146,7 +148,7 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
             <div className="flex items-center justify-between">
               <AIAccessHint />
-              <button className="btn inline-flex items-center gap-2" onClick={analyze} disabled={loading}>{loading ? (<span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/>Analyzing…</span>) : (<span className="inline-flex items-center gap-2">Preview</span>)}</button>
+              <button className="btn inline-flex items-center gap-2" onClick={analyze} disabled={loading}>{loading ? (<span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/>{t("Analyzing…")}</span>) : (<span className="inline-flex items-center gap-2">{t("Preview")}</span>)}</button>
             </div>
           </div>
         )}
@@ -154,10 +156,10 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
         {view === 'preview' && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600 dark:text-gray-300">{items.length} {items.length === 1 ? 'item' : 'items'} to create — remove any you don’t want.</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">{interpolate('draftCount', { count: items.length })}</div>
               <div className="flex items-center gap-2">
-                <button className="btn" onClick={() => setView('input')}>Back</button>
-                <button className="btn" onClick={confirmCreate}>Create {items.length} {items.length === 1 ? 'task' : 'tasks'}</button>
+                <button className="btn" onClick={() => setView('input')}>{t("Back")}</button>
+                <button className="btn" onClick={confirmCreate}>{interpolate('createCount', { count: items.length })}</button>
               </div>
             </div>
             <div className="space-y-3 max-h-[60vh] overflow-auto pr-1">
@@ -171,7 +173,7 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
                 />
               ))}
             </div>
-            {items.length === 0 && <p className="text-sm text-gray-500">No items found.</p>}
+            {items.length === 0 && <p className="text-sm text-gray-500">{t("No items found.")}</p>}
           </div>
         )}
       </div>
@@ -183,7 +185,7 @@ function AIAccessHint() {
   const [hasKey, setHasKey] = useState(false);
   useEffect(() => { try { setHasKey(!!localStorage.getItem(LS_AI_KEY)); } catch { setHasKey(false); } }, []);
   if (hasKey) return null;
-  return <div className="text-xs text-gray-500">Add a Gemini API key in <Link className="underline" href="/settings">Settings</Link>.</div>;
+  return <div className="text-xs text-gray-500">{t("Add a Gemini API key in")}<Link className="underline" href="/settings">{t("Settings")}</Link>.</div>;
 }
 
 function PreviewItem({ item, setItem, index, onRemove }: { item: DraftItem; setItem: (i: DraftItem) => void; index: number; onRemove?: () => void }) {
@@ -194,13 +196,13 @@ function PreviewItem({ item, setItem, index, onRemove }: { item: DraftItem; setI
     <div className="p-3 rounded-xl border border-gray-200 dark:border-slate-700">
       <div className="flex items-center gap-2 justify-between">
         <div className="flex items-center gap-2">
-          <input className="input h-12 text-[16px]" placeholder={item.isEvent ? 'Event title' : 'Task title'} value={item.title} onChange={(e)=>setItem({ ...item, title: e.target.value })} />
+          <input className="input h-12 text-[16px]" placeholder={item.isEvent ? t("Event title") : t("Task title")} value={item.title} onChange={(e)=>setItem({ ...item, title: e.target.value })} />
         </div>
         <div className="flex items-center gap-2 text-sm">
-          <label className="inline-flex items-center gap-1"><input type="checkbox" className="checkbox-circle" checked={item.isEvent} onChange={(e)=>setItem({ ...item, isEvent: e.target.checked })} />Event</label>
-          <label className="inline-flex items-center gap-1"><input type="checkbox" className="checkbox-circle" checked={!!item.allDay} onChange={(e)=>setItem(adjustAllDay(item, e.target.checked))} />All‑day</label>
+          <label className="inline-flex items-center gap-1"><input type="checkbox" className="checkbox-circle" checked={item.isEvent} onChange={(e)=>setItem({ ...item, isEvent: e.target.checked })} />{t("Event")}</label>
+          <label className="inline-flex items-center gap-1"><input type="checkbox" className="checkbox-circle" checked={!!item.allDay} onChange={(e)=>setItem(adjustAllDay(item, e.target.checked))} />{t("All‑day")}</label>
           {onRemove && (
-            <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label="Remove item" title="Remove item" onClick={onRemove}>
+            <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label={t("Remove item")} title={t("Remove item")} onClick={onRemove}>
               <Trash2 className="w-4 h-4" />
             </button>
           )}
@@ -208,7 +210,7 @@ function PreviewItem({ item, setItem, index, onRemove }: { item: DraftItem; setI
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
         <div>
-          <label className="text-sm text-gray-600 dark:text-gray-300">{item.allDay ? 'Date' : 'Start'}</label>
+          <label className="text-sm text-gray-600 dark:text-gray-300">{item.allDay ? t("Date") : t("Start")}</label>
           {item.allDay ? (
             <DateTimePicker className="mt-1" dateOnly value={item.start} onChange={(iso)=> setItem(normalizeAllDayRange({ ...item, start: iso }))} />
           ) : (
@@ -216,7 +218,7 @@ function PreviewItem({ item, setItem, index, onRemove }: { item: DraftItem; setI
           )}
         </div>
         <div>
-          <label className="text-sm text-gray-600 dark:text-gray-300">{item.allDay ? 'End Date' : 'End'}</label>
+          <label className="text-sm text-gray-600 dark:text-gray-300">{item.allDay ? t("End Date") : t("End")}</label>
           {item.allDay ? (
             <DateTimePicker className="mt-1" dateOnly value={item.end} onChange={(iso)=> setItem(normalizeAllDayRange({ ...item, end: iso }))} />
           ) : (
@@ -225,8 +227,8 @@ function PreviewItem({ item, setItem, index, onRemove }: { item: DraftItem; setI
         </div>
       </div>
       <div className="mt-2">
-        <label className="text-sm text-gray-600 dark:text-gray-300">Description</label>
-        <textarea ref={taRef} className="mt-1 resize-none w-full px-3 py-2 rounded-2xl bg-transparent border-0 outline-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600" rows={3} placeholder="Add details…" value={item.description || ''} onChange={(e)=>setItem({ ...item, description: e.target.value })} />
+        <label className="text-sm text-gray-600 dark:text-gray-300">{t("Description")}</label>
+        <textarea ref={taRef} className="mt-1 resize-none w-full px-3 py-2 rounded-2xl bg-transparent border-0 outline-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600" rows={3} placeholder={t("Add details…")} value={item.description || ''} onChange={(e)=>setItem({ ...item, description: e.target.value })} />
       </div>
       <SubtasksEditor item={item} setItem={setItem} />
     </div>
@@ -243,18 +245,18 @@ function SubtasksEditor({ item, setItem }: { item: DraftItem; setItem: (i: Draft
   return (
     <div className="mt-2">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-gray-600 dark:text-gray-300">Subtasks</div>
-        <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label="Add subtask" title="Add subtask" onClick={add}><Plus className="w-4 h-4"/></button>
+        <div className="text-sm text-gray-600 dark:text-gray-300">{t("Subtasks")}</div>
+        <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label={t("Add subtask")} title={t("Add subtask")} onClick={add}><Plus className="w-4 h-4"/></button>
       </div>
       <div className="space-y-2 mt-2">
         {(item.subTasks || []).map((st) => (
           <div key={st.id} className="flex items-center gap-2">
             <input type="checkbox" className="checkbox-circle checkbox-xl" checked={st.done} onChange={(e)=>update(st.id, { done: e.target.checked })} />
             <input className="h-9 flex-1 px-3 rounded-xl bg-transparent border-0 outline-none appearance-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600" value={st.title} onChange={(e)=>update(st.id, { title: e.target.value })} />
-            <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label="Delete subtask" title="Delete subtask" onClick={()=>remove(st.id)}><Trash2 className="w-4 h-4"/></button>
+            <button className="btn border-transparent h-9 w-9 p-0 inline-flex items-center justify-center" aria-label={t("Delete subtask")} title={t("Delete subtask")} onClick={()=>remove(st.id)}><Trash2 className="w-4 h-4"/></button>
           </div>
         ))}
-        {(item.subTasks || []).length === 0 && <div className="text-xs text-gray-500">No subtasks.</div>}
+        {(item.subTasks || []).length === 0 && <div className="text-xs text-gray-500">{t("No subtasks.")}</div>}
       </div>
     </div>
   );
