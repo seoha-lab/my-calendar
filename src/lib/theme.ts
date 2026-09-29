@@ -19,8 +19,6 @@ export function resolveTheme(pref?: Theme): 'light' | 'dark' {
   }
 }
 
-import { setAppBackgroundByDate } from '@/lib/app-background';
-
 export function applyTheme(next: Theme | 'toggle') {
   if (typeof document === 'undefined') return;
   let current: Theme = getStoredTheme() ?? 'light';
@@ -41,24 +39,10 @@ export function applyTheme(next: Theme | 'toggle') {
 
   // Update theme-color meta for better iOS/Android appearance
   const meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
-  if (meta) meta.content = effective === 'dark' ? '#0b1730' : '#f2f3f5';
-
-  // Sync background artwork variant without changing the month
-  try {
-    const rs = getComputedStyle(document.documentElement);
-    const cur = rs.getPropertyValue('--clarity-app-bg') || '';
-    const m = /month-(\d{2})\.svg/.exec(cur)?.[1] || monthIndexFromDate(new Date());
-    const path = effective === 'dark' ? `/backgrounds/rich-dark/month-${m}.svg` : `/backgrounds/rich/month-${m}.svg`;
-    document.documentElement.style.setProperty('--clarity-app-bg', `url(${path})`);
-  } catch {}
+  if (meta) meta.content = effective === 'dark' ? '#0b1730' : '#ffffff';
 
   // Notify listeners
   try { window.dispatchEvent(new CustomEvent('clarity-theme-changed', { detail: { theme: effective } })); } catch {}
-}
-
-function monthIndexFromDate(d: Date): string {
-  const i = isNaN(d.getTime()) ? new Date() : d;
-  return String(i.getMonth() + 1).padStart(2, '0');
 }
 
 // Inline-friendly function to run as early as possible

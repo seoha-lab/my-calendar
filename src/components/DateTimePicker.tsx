@@ -72,7 +72,7 @@ export default function DateTimePicker({ value, onChange, placeholder = t("Pick 
   };
 
   const body = (
-    <div className="dtp-pop card p-2 shadow-xl">
+    <div className="dtp-pop card p-2">
       <div className="flex items-center justify-between mb-1.5">
         <button className="btn btn-ghost h-8 w-8 p-0" onClick={() => setViewMonth(addMonths(viewMonth, -1))} aria-label={t("Previous month")}><ChevronLeft className="w-4 h-4" /></button>
         <div className="font-semibold text-sm select-none">{format(viewMonth, 'MMMM yyyy')}</div>

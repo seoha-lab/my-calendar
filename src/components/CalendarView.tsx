@@ -10,7 +10,6 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@/store';
 import { normalizeCategory } from '@/lib/calendar/categories';
 import { messages } from '@/lib/i18n';
-import { setAppBackgroundByDate } from '@/lib/app-background';
 
 const FullCalendar = dynamic(() => import('@fullcalendar/react'), { ssr: false });
 const FullCalendarAny: any = FullCalendar;
@@ -224,16 +223,7 @@ export default function CalendarView() {
             </div>
           );
         }}
-        datesSet={(arg: any) => {
-          try {
-            const api = calendarRef.current?.getApi?.();
-            const anchor = api?.getDate?.() as Date | undefined;
-            if (anchor instanceof Date && !isNaN(anchor.getTime())) {
-              const m = anchor.getMonth();
-              setAppBackgroundByDate(anchor);
-              try { preloadMonthBackgrounds(m); } catch {}
-            }
-          } catch {}
+        datesSet={() => {
           const api = calendarRef.current?.getApi?.();
           if (!api) return;
           const viewType = api.view?.type;
@@ -375,12 +365,6 @@ function useEvents() {
   return useMemo(() => Object.values(tasks), [tasks]);
 }
 
-function bgForMonth(m: number): string {
-  const idx = (m + 1).toString().padStart(2, '0');
-  const dark = isDark();
-  return dark ? `/backgrounds/rich-dark/month-${idx}.svg` : `/backgrounds/rich/month-${idx}.svg`;
-}
-
 function colorFromStage(stage?: string): string {
   switch (stage) {
     case 'todo': return '#eab308'; // yellow-500
@@ -415,14 +399,4 @@ function uiFromStage(stage?: string): { bg: string; border: string } {
 function isDark(): boolean {
   if (typeof document === 'undefined') return false;
   try { return document.documentElement.classList.contains('dark'); } catch { return false; }
-}
-
-function preloadMonthBackgrounds(m: number) {
-  if (typeof Image === 'undefined') return;
-  const months = [((m + 11) % 12), m, ((m + 1) % 12)];
-  for (const mm of months) {
-    const url = bgForMonth(mm);
-    const img = new Image();
-    img.src = url;
-  }
 }

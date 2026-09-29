@@ -173,14 +173,12 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
 
   const overlay = (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50" onMouseDown={closeWithAnimation}>
-      {/* Backdrop + monthly background */}
-      <div className="absolute inset-0 bg-black/30" />
-      <div aria-hidden className="absolute inset-0 bg-center bg-cover pointer-events-none" style={{ backgroundImage: 'var(--clarity-app-bg)', opacity: 0.25 }} />
+      <div className="absolute inset-0 bg-black/20 dark:bg-black/60" />
       {/* Right-side fixed panel */}
       <div
         ref={panelRef}
         data-details-panel
-        className="fixed right-0 top-0 h-screen w-full max-w-md card border-0 p-4 overflow-y-auto bg-white/90 dark:bg-slate-900/80 backdrop-blur"
+        className="fixed right-0 top-0 h-screen w-full max-w-md card border-y-0 border-r-0 p-4 overflow-y-auto bg-white dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
       >

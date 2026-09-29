@@ -142,10 +142,10 @@ export default function TaskBoard() {
 type Tone = 'yellow'|'blue'|'gray'|'rose';
 function toneClasses(tone: Tone) {
   switch (tone) {
-    case 'yellow': return { bg: 'bg-yellow-50 dark:bg-yellow-900/15', border: 'border-yellow-200 dark:border-yellow-800', headerBg: 'bg-yellow-50/90 dark:bg-yellow-900/20', headerBorder: 'border-yellow-200/70 dark:border-yellow-800' };
-    case 'blue': return { bg: 'bg-blue-50 dark:bg-blue-900/15', border: 'border-blue-200 dark:border-blue-800', headerBg: 'bg-blue-50/90 dark:bg-blue-900/20', headerBorder: 'border-blue-200/60 dark:border-blue-800' };
-    case 'gray': return { bg: 'bg-gray-50 dark:bg-slate-800/30', border: 'border-gray-200 dark:border-slate-700', headerBg: 'bg-gray-50/90 dark:bg-slate-900/30', headerBorder: 'border-gray-200/60 dark:border-slate-700' };
-    case 'rose': return { bg: 'bg-rose-50 dark:bg-rose-900/15', border: 'border-rose-200 dark:border-rose-800', headerBg: 'bg-rose-50/90 dark:bg-rose-900/20', headerBorder: 'border-rose-200/60 dark:border-rose-800' };
+    case 'yellow': return { bg: 'bg-white dark:bg-yellow-900/15', border: 'border-gray-200 dark:border-yellow-800', headerBg: 'bg-white dark:bg-yellow-900/20', headerBorder: 'border-gray-200 dark:border-yellow-800' };
+    case 'blue': return { bg: 'bg-white dark:bg-blue-900/15', border: 'border-gray-200 dark:border-blue-800', headerBg: 'bg-white dark:bg-blue-900/20', headerBorder: 'border-gray-200 dark:border-blue-800' };
+    case 'gray': return { bg: 'bg-white dark:bg-slate-800/30', border: 'border-gray-200 dark:border-slate-700', headerBg: 'bg-white dark:bg-slate-900/30', headerBorder: 'border-gray-200 dark:border-slate-700' };
+    case 'rose': return { bg: 'bg-white dark:bg-rose-900/15', border: 'border-gray-200 dark:border-rose-800', headerBg: 'bg-white dark:bg-rose-900/20', headerBorder: 'border-gray-200 dark:border-rose-800' };
   }
 }
 
@@ -153,30 +153,22 @@ function Column({ id, title, items, onToggle, onOpen, tone, headerRight, icon }:
   const cls = toneClasses(tone);
   const { setNodeRef, isOver } = useDroppable({ id: `column:${id}` });
   const [scrolled, setScrolled] = useState(false);
-  const [atTop, setAtTop] = useState(true);
-  const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget as HTMLDivElement;
     const st = el.scrollTop || 0;
-    const canScrollDown = st + el.clientHeight < el.scrollHeight - 1;
     setScrolled(st > 0);
-    setAtTop(st <= 0);
-    setAtBottom(!canScrollDown);
   };
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const st = el.scrollTop;
-    setScrolled(st > 0);
-    setAtTop(st <= 0);
-    setAtBottom(st + el.clientHeight >= el.scrollHeight - 1);
+    setScrolled(el.scrollTop > 0);
   }, []);
   const openAdd = () => { openQuickAdd(''); };
   return (
     <div ref={setNodeRef} className={`rounded-2xl h-full max-h-full overflow-hidden flex flex-col border ${cls.border} ${cls.bg} ${isOver ? 'ring-2 ring-blue-400' : ''}`} aria-label={interpolate('columnLabel', { title })}>
       {/* Fixed header (outside scroller) ensures perfect alignment across columns */}
-      <div className={`px-3 h-12 flex items-center justify-between ${cls.headerBg} ${scrolled ? `shadow-sm border-b ${cls.headerBorder}` : ''} backdrop-blur supports-[backdrop-filter]:bg-white/40 dark:supports-[backdrop-filter]:bg-slate-900/30`}>
+      <div className={`px-3 h-12 flex items-center justify-between ${cls.headerBg} ${scrolled ? `border-b ${cls.headerBorder}` : ''}`}>
         <h3 className="font-semibold flex items-center gap-2">{icon}{title}</h3>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">{items.length}</span>
@@ -185,10 +177,6 @@ function Column({ id, title, items, onToggle, onOpen, tone, headerRight, icon }:
       </div>
       <div className="flex-1 min-h-0">
         <div className="relative h-full">
-          {/* Top fade */}
-          <div className={`pointer-events-none absolute left-0 right-0 top-0 h-6 bg-gradient-to-b from-black/30 to-transparent dark:from-black/50 transition-opacity duration-150 ${atTop ? 'opacity-0' : 'opacity-100'}`} />
-          {/* Bottom fade */}
-          <div className={`pointer-events-none absolute left-0 right-0 bottom-0 h-6 bg-gradient-to-t from-black/30 to-transparent dark:from-black/50 transition-opacity duration-150 ${atBottom ? 'opacity-0' : 'opacity-100'}`} />
           <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto thin-scrollbar p-3">
             <div className="space-y-2 pt-1">
               {items.length === 0 && (

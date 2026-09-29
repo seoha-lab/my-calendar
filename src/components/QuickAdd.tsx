@@ -304,7 +304,7 @@ function DraftFromNotesInsideQuickAdd({ onClose, textAreaRef }: { onClose: () =>
         </div>
         <div className="text-xs text-gray-500">{t("Cmd/Ctrl+Enter to preview or create")}</div>
       </div>
-      <div className="rounded-2xl border border-dashed border-gray-300 dark:border-slate-700 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900/80 dark:to-slate-900/60 shadow-inner backdrop-blur-md">
+      <div className="rounded-2xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <textarea
           ref={textAreaRef}
           className="w-full h-48 resize-y px-4 py-3 rounded-2xl bg-transparent border-0 outline-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600"
@@ -335,7 +335,7 @@ function DraftFromNotesInsideQuickAdd({ onClose, textAreaRef }: { onClose: () =>
             />
           ))}
           <div className="sticky bottom-0 pt-2">
-            <div className="flex items-center justify-end rounded-xl px-3 py-2 bg-gradient-to-t from-white/90 to-transparent dark:from-slate-900/80">
+            <div className="flex items-center justify-end rounded-xl px-3 py-2 bg-white dark:bg-slate-900">
               <button className="btn" onClick={confirmCreate}>{interpolate('createCount', { count: items.length })}</button>
             </div>
           </div>
@@ -351,7 +351,7 @@ function DraftPreviewItem({ item, setItem, index, onRemove }: { item: DraftItem;
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => { const el = taRef.current; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(220, Math.max(64, el.scrollHeight)) + 'px'; }, [item.description]);
   return (
-    <div className="p-3 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-800/50 backdrop-blur-sm shadow-sm">
+    <div className="p-3 rounded-2xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-800">
       <div className="flex items-center gap-3 justify-between">
         <div className="flex items-center gap-3">
           <div className={`w-1.5 h-6 rounded-full ${item.isEvent ? 'bg-blue-500' : 'bg-emerald-500'}`} aria-hidden />

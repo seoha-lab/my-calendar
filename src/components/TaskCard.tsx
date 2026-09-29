@@ -42,7 +42,7 @@ export default function TaskCard({ task, onToggle, onOpen, showFullDate = false 
     <div
       ref={ref}
       tabIndex={0}
-      className={`rounded-2xl shadow-soft border p-3 focus:ring-2 focus:ring-blue-500 outline-none fc-draggable-task cursor-grab ${hueClass}`}
+      className={`rounded-2xl border p-3 focus:ring-2 focus:ring-blue-500 outline-none fc-draggable-task cursor-grab ${hueClass}`}
       data-id={task.id}
       data-title={task.title}
       role="button"
