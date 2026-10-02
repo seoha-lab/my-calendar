@@ -2,13 +2,15 @@
   DB Worker RPC client
 */
 import { normalizeCategory } from '@/lib/calendar/categories';
-import { Task, CalendarSource, Stage, TaskRange } from '@/types';
+import { Task, CalendarSource, Stage, TaskRange, ShiftAssignment, ShiftType } from '@/types';
+import type { ShiftAssignmentInput } from '@/lib/shifts/ShiftProvider';
 
 type WorkerMsg =
   | { id: string; type: 'init' }
   | { id: string; type: 'migrate' }
   | { id: string; type: 'run'; sql: string; params?: unknown[] }
-  | { id: string; type: 'all'; sql: string; params?: unknown[] };
+  | { id: string; type: 'all'; sql: string; params?: unknown[] }
+  | { id: string; type: 'batch'; statements: { sql: string; params?: unknown[] }[] };
 
 type WorkerResp<T = unknown> =
   | { id: string; ok: true; result?: T }
@@ -49,17 +51,12 @@ async function ensureReady() {
     await call({ id: id2, type: 'migrate' });
     ready = true;
   } else {
-    // Verify critical migrations (e.g., 'completedAt') are applied even if this module
-    // was initialized before the code changed (dev HMR / long-lived session)
-    try {
-      const cols = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'PRAGMA table_info(tasks);', params: [] });
-      const hasCompletedAt = Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === 'completedAt');
-      if (!hasCompletedAt) {
-        await call({ id: crypto.randomUUID(), type: 'migrate' });
-      }
-    } catch {
-      // If PRAGMA fails for any reason, attempt a migrate
-      try { await call({ id: crypto.randomUUID(), type: 'migrate' }); } catch {}
+    // Re-run additive migrations after HMR or when a long-lived tab receives new code.
+    const cols = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'PRAGMA table_info(tasks);', params: [] });
+    const shiftTables = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('shift_types','shift_assignments');", params: [] });
+    const hasCompletedAt = Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === 'completedAt');
+    if (!hasCompletedAt || shiftTables.length !== 2) {
+      await call({ id: crypto.randomUUID(), type: 'migrate' });
     }
   }
 }
@@ -114,6 +111,30 @@ function taskToDB(task: Partial<Task>): { cols: string[]; vals: unknown[]; place
     }
   }
   return { cols, vals, placeholders };
+}
+
+function rowToShiftType(row: any): ShiftType {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    startTime: row.startTime == null ? null : String(row.startTime),
+    endTime: row.endTime == null ? null : String(row.endTime),
+    crossesMidnight: !!row.crossesMidnight,
+    isOff: !!row.isOff,
+    enabled: !!row.enabled,
+    sortOrder: Number(row.sortOrder ?? 0),
+  };
+}
+
+function rowToShiftAssignment(row: any): ShiftAssignment {
+  return {
+    id: String(row.id),
+    date: String(row.date),
+    shiftTypeId: String(row.shiftTypeId),
+    createdAt: String(row.createdAt),
+    updatedAt: String(row.updatedAt),
+  };
 }
 
 export const db = {
@@ -340,5 +361,70 @@ export const db = {
       }
     } catch {}
     return await this.getTask(taskId);
+  },
+
+  // --- Shifts ---
+  async listShiftTypes(): Promise<ShiftType[]> {
+    await ensureReady();
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_types ORDER BY sortOrder ASC, code ASC', params: [] });
+    return rows.map(rowToShiftType);
+  },
+
+  async listShiftAssignments(from?: string, to?: string): Promise<ShiftAssignment[]> {
+    await ensureReady();
+    let sql = 'SELECT * FROM shift_assignments';
+    const params: string[] = [];
+    if (from && to) {
+      sql += ' WHERE date >= ? AND date <= ?';
+      params.push(from, to);
+    } else if (from) {
+      sql += ' WHERE date >= ?';
+      params.push(from);
+    } else if (to) {
+      sql += ' WHERE date <= ?';
+      params.push(to);
+    }
+    sql += ' ORDER BY date ASC';
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql, params });
+    return rows.map(rowToShiftAssignment);
+  },
+
+  async setShiftAssignment(input: ShiftAssignmentInput): Promise<ShiftAssignment> {
+    await ensureReady();
+    const existing = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_assignments WHERE date = ?', params: [input.date] });
+    const now = new Date().toISOString();
+    if (existing[0]) {
+      await call({ id: crypto.randomUUID(), type: 'run', sql: 'UPDATE shift_assignments SET shiftTypeId = ?, updatedAt = ? WHERE date = ?', params: [input.shiftTypeId, now, input.date] });
+    } else {
+      await call({ id: crypto.randomUUID(), type: 'run', sql: 'INSERT INTO shift_assignments(id, date, shiftTypeId, createdAt, updatedAt) VALUES (?,?,?,?,?)', params: [crypto.randomUUID(), input.date, input.shiftTypeId, now, now] });
+    }
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_assignments WHERE date = ?', params: [input.date] });
+    if (!rows[0]) throw new Error('Shift assignment was not saved');
+    return rowToShiftAssignment(rows[0]);
+  },
+
+  async setShiftAssignments(inputs: ShiftAssignmentInput[]): Promise<ShiftAssignment[]> {
+    await ensureReady();
+    if (inputs.length === 0) return [];
+    const now = new Date().toISOString();
+    await call({
+      id: crypto.randomUUID(),
+      type: 'batch',
+      statements: inputs.map((input) => ({
+        sql: `INSERT INTO shift_assignments(id, date, shiftTypeId, createdAt, updatedAt)
+          VALUES (?,?,?,?,?)
+          ON CONFLICT(date) DO UPDATE SET shiftTypeId = excluded.shiftTypeId, updatedAt = excluded.updatedAt`,
+        params: [crypto.randomUUID(), input.date, input.shiftTypeId, now, now],
+      })),
+    });
+    const dates = inputs.map((input) => input.date);
+    const placeholders = dates.map(() => '?').join(',');
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: `SELECT * FROM shift_assignments WHERE date IN (${placeholders}) ORDER BY date ASC`, params: dates });
+    return rows.map(rowToShiftAssignment);
+  },
+
+  async deleteShiftAssignment(date: string): Promise<void> {
+    await ensureReady();
+    await call({ id: crypto.randomUUID(), type: 'run', sql: 'DELETE FROM shift_assignments WHERE date = ?', params: [date] });
   },
 };

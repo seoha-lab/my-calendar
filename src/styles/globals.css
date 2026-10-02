@@ -504,6 +504,8 @@ input[type="datetime-local"].input::-webkit-calendar-picker-indicator { opacity:
 }
 
 .fc .fc-button { white-space: nowrap; }
+.fc .fc-shift-event { font-size: 0.75rem; cursor: pointer; }
+.fc .fc-shift-event .fc-event-main { color: var(--category-text) !important; }
 @media (max-width: 767px) {
   .fc .fc-header-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .fc .fc-toolbar-chunk:nth-child(2) { order: -1; width: 100%; text-align: center; }

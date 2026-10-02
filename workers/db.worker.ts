@@ -5,7 +5,8 @@ type Message =
   | { id: string; type: 'init' }
   | { id: string; type: 'migrate' }
   | { id: string; type: 'run'; sql: string; params?: unknown[] }
-  | { id: string; type: 'all'; sql: string; params?: unknown[] };
+  | { id: string; type: 'all'; sql: string; params?: unknown[] }
+  | { id: string; type: 'batch'; statements: { sql: string; params?: unknown[] }[] };
 
 type Response =
   | { id: string; ok: true; result?: unknown }
@@ -77,6 +78,40 @@ CREATE TABLE IF NOT EXISTS task_ranges (
 );
 CREATE INDEX IF NOT EXISTS idx_task_ranges_task ON task_ranges(taskId);
 CREATE INDEX IF NOT EXISTS idx_task_ranges_time ON task_ranges(start, end);
+
+CREATE TABLE IF NOT EXISTS shift_types (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  startTime TEXT,
+  endTime TEXT,
+  crossesMidnight INTEGER NOT NULL DEFAULT 0,
+  isOff INTEGER NOT NULL DEFAULT 0,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  sortOrder INTEGER NOT NULL DEFAULT 0,
+  CHECK (
+    (isOff = 1 AND startTime IS NULL AND endTime IS NULL)
+    OR
+    (isOff = 0 AND startTime IS NOT NULL AND endTime IS NOT NULL)
+  )
+);
+
+CREATE TABLE IF NOT EXISTS shift_assignments (
+  id TEXT PRIMARY KEY,
+  date TEXT NOT NULL UNIQUE,
+  shiftTypeId TEXT NOT NULL REFERENCES shift_types(id),
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_shift_assignments_date ON shift_assignments(date);
+CREATE INDEX IF NOT EXISTS idx_shift_assignments_type ON shift_assignments(shiftTypeId);
+
+INSERT OR IGNORE INTO shift_types(id,code,name,startTime,endTime,crossesMidnight,isOff,enabled,sortOrder)
+VALUES
+  ('shift-d7','D7','데이','06:30','18:30',0,0,1,10),
+  ('shift-n7','N7','나이트','18:30','06:30',1,0,1,20),
+  ('shift-off','OFF','오프',NULL,NULL,0,1,1,30);
 `;
 }
 
@@ -202,6 +237,21 @@ SELECT id,title,description,stage,checked,completedAt,start,end,allDay,isEvent,h
           rowMode: 'object',
         });
         send({ id: msg.id, ok: true, result: rows });
+        break;
+      }
+      case 'batch': {
+        const dbi = await ensureDB();
+        dbi.exec('BEGIN;');
+        try {
+          for (const statement of msg.statements) {
+            dbi.exec({ sql: statement.sql, bind: statement.params ?? [] });
+          }
+          dbi.exec('COMMIT;');
+        } catch (error) {
+          dbi.exec('ROLLBACK;');
+          throw error;
+        }
+        send({ id: msg.id, ok: true });
         break;
       }
     }

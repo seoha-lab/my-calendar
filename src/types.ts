@@ -51,3 +51,30 @@ export interface TaskRange {
   createdAt?: string; // ISO
   updatedAt?: string; // ISO
 }
+
+export interface ShiftType {
+  id: string;
+  code: string;
+  name: string;
+  startTime: string | null; // local HH:mm
+  endTime: string | null;   // local HH:mm
+  crossesMidnight: boolean;
+  isOff: boolean;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface ShiftAssignment {
+  id: string;
+  date: string; // YYYY-MM-DD, interpreted as the local shift start date
+  shiftTypeId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusyInterval {
+  source: 'task' | 'shift';
+  sourceId: string;
+  start: Date;
+  end: Date;
+}

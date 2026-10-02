@@ -10,6 +10,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@/store';
 import { normalizeCategory } from '@/lib/calendar/categories';
 import { messages } from '@/lib/i18n';
+import { shiftAssignmentToCalendarEvent } from '@/lib/shifts';
+import { openShiftManager } from '@/lib/shifts/ui';
 
 const FullCalendar = dynamic(() => import('@fullcalendar/react'), { ssr: false });
 const FullCalendarAny: any = FullCalendar;
@@ -25,6 +27,8 @@ export default function CalendarView() {
   const deleteTask = useStore((s) => s.deleteTask);
   const calendars = useStore((s) => s.calendars);
   const hideDone = useStore((s) => s.hideDone);
+  const shiftTypes = useStore((s) => s.shiftTypes);
+  const shiftAssignments = useStore((s) => s.shiftAssignments);
   const calendarRef = useRef<any>(null);
   // Re-render events instantly on theme change so inline colors refresh
   useEffect(() => {
@@ -138,8 +142,14 @@ export default function CalendarView() {
         });
       }
     }
+    const typesById = new Map(shiftTypes.map((type) => [type.id, type]));
+    for (const assignment of Object.values(shiftAssignments)) {
+      const type = typesById.get(assignment.shiftTypeId);
+      if (!type || !type.enabled) continue;
+      list.push(shiftAssignmentToCalendarEvent(assignment, type));
+    }
     return list;
-  }, [events, calendars, search, hideDone]);
+  }, [events, calendars, search, hideDone, shiftTypes, shiftAssignments]);
 
   return (
     <div className="p-2 h-full overflow-hidden calendar-shell min-w-0 w-full min-h-[640px] relative rounded-2xl bg-transparent">
@@ -150,6 +160,9 @@ export default function CalendarView() {
         initialView={typeof window !== 'undefined' && window.innerWidth < 640 ? 'timeGridDay' : 'timeGridFourDay'}
         views={{
           timeGridFourDay: { type: 'timeGrid', duration: { days: 4 }, buttonText: '4일' },
+        }}
+        customButtons={{
+          shiftPlanner: { text: '근무', click: () => openShiftManager(undefined, 'single') },
         }}
         buttonText={{
           today: '오늘',
@@ -171,7 +184,7 @@ export default function CalendarView() {
             return { text: arg.text } as any;
           }
         }}
-        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'timeGridFourDay,timeGridWeek,timeGridDay,dayGridMonth' }}
+        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'shiftPlanner timeGridFourDay,timeGridWeek,timeGridDay,dayGridMonth' }}
         height="100%"
         expandRows={true}
         dayMaxEventRows={3}
@@ -183,12 +196,22 @@ export default function CalendarView() {
         eventTimeFormat={{ hour: 'numeric', minute: '2-digit', hour12: true }}
         eventClassNames={(arg: any) => {
           const ep: any = arg.event.extendedProps || {};
+          if (ep.kind === 'shift') return 'fc-event-minimal fc-shift-event category-hospital';
           const key = ep.taskId || String(arg.event.id);
           const base = creatingIds.current.has(key) ? 'fc-event-minimal fc-event-creating' : 'fc-event-minimal';
           return `${base} category-${normalizeCategory(ep.category)}${ep.hasMultiRanges ? ' fc-event-has-multi' : ''}`;
         }}
         eventContent={(arg: any) => {
           const ep: any = arg.event.extendedProps || {};
+          if (ep.kind === 'shift') {
+            const monthView = arg.view?.type === 'dayGridMonth';
+            return (
+              <div className="flex h-full w-full flex-col overflow-hidden">
+                <span className="font-semibold leading-tight">{ep.shiftCode}</span>
+                {!monthView && <span className="mt-1 text-xs leading-tight opacity-80">{ep.shiftTimeLabel}</span>}
+              </div>
+            );
+          }
           const done = ep.subDone ?? 0;
           const total = ep.subTotal ?? 0;
           const strike = (ep.checked || ep.stage === 'done') ? 'line-through' : '';
@@ -293,6 +316,12 @@ export default function CalendarView() {
         }}
         eventClick={(info: any) => {
           try {
+            if (info.event.extendedProps?.kind === 'shift') {
+              openShiftManager(info.event.extendedProps.shiftDate, 'single');
+              info.jsEvent?.preventDefault();
+              info.jsEvent?.stopPropagation();
+              return;
+            }
             const id: string = info.event.extendedProps?.taskId || String(info.event.id).split(':')[0];
             const rangeId: string | undefined = info.event.extendedProps?.rangeId;
             window.dispatchEvent(new CustomEvent('open-task-details', { detail: { id, rangeId } }));
@@ -302,6 +331,7 @@ export default function CalendarView() {
         }}
         eventDrop={async (info: any) => {
           const ev: any = info.event;
+          if (ev.extendedProps?.kind === 'shift') { info.revert(); return; }
           const oldEv: any = (info as any).oldEvent;
           const start = ev.start as Date | null;
           let end = ev.end as Date | null;
@@ -323,6 +353,7 @@ export default function CalendarView() {
         }}
         eventResize={async (info: any) => {
           const ev: any = info.event;
+          if (ev.extendedProps?.kind === 'shift') { info.revert(); return; }
           const rangeId: string = ev.extendedProps?.rangeId;
           const taskId: string = ev.extendedProps?.taskId || String(ev.id).split(':')[0];
           const startISO = ev.start?.toISOString();
@@ -338,6 +369,12 @@ export default function CalendarView() {
           try {
             // Native tooltip with time range + accessible label
             const el = info.el as HTMLElement;
+            if (info.event.extendedProps?.kind === 'shift') {
+              const ep = info.event.extendedProps;
+              el.title = `${ep.shiftCode} ${ep.shiftName} • ${ep.shiftTimeLabel}`;
+              el.setAttribute('aria-label', `${ep.shiftDate} ${ep.shiftCode} ${ep.shiftName}, ${ep.shiftTimeLabel}`);
+              return;
+            }
             const s = info.event.start;
             const e = info.event.end;
             if (s && e) {

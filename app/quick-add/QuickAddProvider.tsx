@@ -2,6 +2,7 @@
 import { t } from '@/lib/i18n';
 
 import CalendarThemeStyles from '@/components/CalendarThemeStyles';
+import ShiftManagerModal from '@/components/ShiftManagerModal';
 import Header from '@/components/Header';
 import QuickAdd from '@/components/QuickAdd';
 import { useEffect, useState } from 'react';
@@ -50,6 +51,7 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
       <Header onQuickAdd={() => { setInitialText(''); setInitialMode('quick'); setOpen(true); }} />
       {children}
       <QuickAdd open={open} initialText={initialText} initialMode={initialMode} onClose={() => setOpen(false)} />
+      <ShiftManagerModal />
     </>
   );
 }
