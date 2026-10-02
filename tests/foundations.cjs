@@ -74,6 +74,37 @@ async function main() {
   assert.equal(getShiftBusyIntervals([{...assignment,shiftTypeId:off.id}],[off]).length,0);
   assert.equal(getShiftBusyIntervals([assignment],[n7]).length,1);
   assert.equal(getCombinedBusyIntervals([task],[assignment],[n7]).length,2);
+  const { intervalsOverlap, findConflicts, mergeBusyIntervals, clipBusyIntervals, calculateFreeTime } = load('src/lib/scheduling/intervals.ts');
+  const busy = (id,start,end,source='task') => ({source,sourceId:id,title:id,start:new Date(start),end:new Date(end)});
+  const ten = busy('a','2026-10-02T10:00:00+09:00','2026-10-02T11:00:00+09:00');
+  assert.equal(intervalsOverlap(ten,busy('b','2026-10-02T10:30:00+09:00','2026-10-02T12:00:00+09:00')),true);
+  assert.equal(intervalsOverlap(ten,busy('touch','2026-10-02T11:00:00+09:00','2026-10-02T12:00:00+09:00')),false);
+  assert.equal(findConflicts(ten,[ten],{source:'task',sourceId:'a'}).hasConflict,false);
+  const merged = mergeBusyIntervals([
+    busy('a','2026-10-02T09:00:00+09:00','2026-10-02T11:00:00+09:00'),
+    busy('b','2026-10-02T10:30:00+09:00','2026-10-02T12:00:00+09:00'),
+    busy('c','2026-10-02T12:00:00+09:00','2026-10-02T13:00:00+09:00'),
+  ]);
+  assert.equal(merged.length,1); assert.deepEqual([merged[0].start.getHours(),merged[0].end.getHours()],[9,13]);
+  const clipped = clipBusyIntervals([busy('wide','2026-10-02T06:00:00+09:00','2026-10-03T01:00:00+09:00')],{start:new Date(2026,9,2,7),end:new Date(2026,9,2,23)});
+  assert.deepEqual([clipped[0].start.getHours(),clipped[0].end.getHours()],[7,23]);
+  const caseA = calculateFreeTime({date:'2026-10-02',dayStart:'07:00',dayEnd:'23:00',minimumMinutes:30,busyIntervals:[
+    busy('one','2026-10-02T09:00:00+09:00','2026-10-02T10:00:00+09:00'),
+    busy('two','2026-10-02T14:00:00+09:00','2026-10-02T15:30:00+09:00'),
+  ]});
+  assert.deepEqual(caseA.free.map(item=>[item.start.getHours(),item.start.getMinutes(),item.end.getHours(),item.end.getMinutes()]),[[7,0,9,0],[10,0,14,0],[15,30,23,0]]);
+  assert.equal(calculateFreeTime({date:'2026-10-02',dayStart:'07:00',dayEnd:'23:00',minimumMinutes:30,busyIntervals:[]}).totalFreeMinutes,960);
+  assert.equal(calculateFreeTime({date:'2026-10-02',dayStart:'07:00',dayEnd:'23:00',minimumMinutes:30,busyIntervals:[busy('all','2026-10-02T00:00:00+09:00','2026-10-03T00:00:00+09:00')]}).free.length,0);
+  const d7Free = calculateFreeTime({date:'2026-10-01',dayStart:'07:00',dayEnd:'23:00',minimumMinutes:30,busyIntervals:getShiftBusyIntervals([{...assignment,shiftTypeId:d7.id}],[d7])});
+  assert.deepEqual(d7Free.free.map(item=>[item.start.getHours(),item.end.getHours(),item.end.getMinutes()]),[[18,23,0]]); assert.equal(d7Free.free[0].start.getMinutes(),30);
+  const n7Busy = getShiftBusyIntervals([assignment],[n7]);
+  const n7StartDay = calculateFreeTime({date:'2026-10-01',dayStart:'07:00',dayEnd:'23:00',minimumMinutes:30,busyIntervals:n7Busy});
+  assert.deepEqual([n7StartDay.free[0].start.getHours(),n7StartDay.free[0].end.getHours(),n7StartDay.free[0].end.getMinutes()],[7,18,30]);
+  const n7NextDay = calculateFreeTime({date:'2026-10-02',dayStart:'07:00',dayEnd:'23:00',minimumMinutes:30,busyIntervals:n7Busy});
+  assert.equal(n7NextDay.totalFreeMinutes,960);
+  assert.equal(calculateFreeTime({date:'2026-10-01',dayStart:'07:00',dayEnd:'23:00',minimumMinutes:30,busyIntervals:getShiftBusyIntervals([{...assignment,shiftTypeId:off.id}],[off])}).totalFreeMinutes,960);
+  const boundary = calculateFreeTime({date:'2026-10-02',dayStart:'07:00',dayEnd:'08:00',minimumMinutes:30,busyIntervals:[busy('short','2026-10-02T07:30:00+09:00','2026-10-02T08:00:00+09:00')]});
+  assert.equal(boundary.free.length,1); assert.equal(boundary.free[0].durationMinutes,30);
   const reference = new Date(2026,9,2,10,0);
   const { parseKoreanInput, parseKoreanDate, parseKoreanTime, localDateTimeToISO } = load('src/lib/nlp/index.ts');
   assert.equal(parseKoreanDate('오늘',reference).date,'2026-10-02');
@@ -102,6 +133,10 @@ async function main() {
   assert.deepEqual({kind:parseKoreanInput('내일 나이트',reference).kind,date:parseKoreanInput('내일 나이트',reference).date,shiftCode:parseKoreanInput('내일 나이트',reference).shiftCode},{kind:'shift',date:'2026-10-03',shiftCode:'N7'});
   assert.equal(parseKoreanInput('금요일 오프',reference).shiftCode,'OFF');
   assert.equal(parseKoreanInput('10월 8일 D7',reference).shiftCode,'D7');
+  const quickAddD7 = parseKoreanInput('오늘 오전 9시 수영',new Date(2026,9,1,8));
+  const quickStart = new Date(localDateTimeToISO(quickAddD7.date,quickAddD7.startTime));
+  const quickEnd = new Date(localDateTimeToISO(quickAddD7.date,quickAddD7.endTime));
+  assert.equal(findConflicts({start:quickStart,end:quickEnd},getShiftBusyIntervals([{...assignment,shiftTypeId:d7.id}],[d7])).hasConflict,true);
   const ambiguous = parseKoreanInput('내일 3시 회의',reference);
   assert.equal(ambiguous.startTime,undefined); assert.ok(ambiguous.ambiguities.some(item=>item.includes('오전인지 오후인지')));
   const failure = parseKoreanInput('회의',reference);
@@ -151,6 +186,6 @@ async function main() {
   sqlDB.exec({sql:'DELETE FROM shift_assignments WHERE date = ?',bind:['2026-10-01']});
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_assignments',returnValue:'resultRows',rowMode:'object'})[0].n,0);
   sqlDB.close();
-  console.log('PASS: themes/categories, Korean NLP dates/times/location/category/ambiguity/shifts, English regression, local timezone, shift intervals/patterns, SQLite migration and persistence.');
+  console.log('PASS: Korean NLP, interval conflicts/touching/self-exclusion, merge/clipping, D7/N7/OFF free time, previous-day N7, minimum duration, timezone, shifts and SQLite persistence.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

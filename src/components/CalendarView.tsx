@@ -260,6 +260,7 @@ export default function CalendarView() {
         editable
         droppable
         dateClick={async (info: any) => {
+          try { window.dispatchEvent(new CustomEvent('calendar-date-selected', { detail: { date: info.dateStr.slice(0, 10) } })); } catch {}
           const clicks = (info.jsEvent as MouseEvent | undefined)?.detail ?? 1;
           if (clicks < 2) return;
           // Ignore double-clicks originating on existing events to avoid accidental duplicates

@@ -7,7 +7,10 @@ export function getTaskBusyIntervals(tasks: Task[]): BusyInterval[] {
     const ranges = task.ranges?.length ? task.ranges : (task.start && task.end ? [{ start: task.start, end: task.end }] : []);
     return ranges.flatMap((range) => {
       if (!range.start || !range.end) return [];
-      return [{ source: 'task' as const, sourceId: task.id, start: new Date(range.start), end: new Date(range.end) }];
+      const start = new Date(range.start);
+      const end = new Date(range.end);
+      if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end) return [];
+      return [{ source: 'task' as const, sourceId: task.id, title: task.title, category: task.category, start, end }];
     });
   });
 }
@@ -18,7 +21,7 @@ export function getShiftBusyIntervals(assignments: ShiftAssignment[], shiftTypes
     const type = types.get(assignment.shiftTypeId);
     if (!type) return [];
     const interval = getShiftInterval(assignment.date, type);
-    return interval ? [{ source: 'shift' as const, sourceId: assignment.id, ...interval }] : [];
+    return interval ? [{ source: 'shift' as const, sourceId: assignment.id, title: `${type.code} ${type.name}`, category: 'hospital' as const, ...interval }] : [];
   });
 }
 

@@ -3,15 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react';
 import { useStore } from '@/store';
-import { buildShiftPattern, toLocalDateKey } from '@/lib/shifts';
+import { buildShiftPattern, getShiftInterval, toLocalDateKey } from '@/lib/shifts';
 import type { ShiftAssignmentInput } from '@/lib/shifts';
 import { toast } from '@/lib/toast';
+import { findConflicts, getTaskBusyIntervals } from '@/lib/scheduling';
 
 type Mode = 'single' | 'pattern';
 
 export default function ShiftManagerModal() {
   const shiftTypes = useStore((state) => state.shiftTypes);
   const assignments = useStore((state) => state.shiftAssignments);
+  const tasks = useStore((state) => state.tasks);
   const refreshShifts = useStore((state) => state.refreshShifts);
   const setShiftAssignment = useStore((state) => state.setShiftAssignment);
   const setShiftAssignments = useStore((state) => state.setShiftAssignments);
@@ -24,9 +26,22 @@ export default function ShiftManagerModal() {
   const [repetitions, setRepetitions] = useState(3);
   const [preview, setPreview] = useState<ShiftAssignmentInput[]>([]);
   const [saving, setSaving] = useState(false);
+  const [confirmedConflicts, setConfirmedConflicts] = useState(false);
 
   const enabledTypes = useMemo(() => shiftTypes.filter((type) => type.enabled), [shiftTypes]);
   const typesById = useMemo(() => new Map(shiftTypes.map((type) => [type.id, type])), [shiftTypes]);
+  const taskBusy = useMemo(() => getTaskBusyIntervals(Object.values(tasks)), [tasks]);
+  const singleConflicts = useMemo(() => {
+    const type = typesById.get(selectedTypeId);
+    if (!type) return [];
+    const interval = getShiftInterval(date, type);
+    return interval ? findConflicts(interval, taskBusy).conflicts : [];
+  }, [date, selectedTypeId, taskBusy, typesById]);
+  const patternConflictCount = useMemo(() => preview.reduce((count, item) => {
+    const type = typesById.get(item.shiftTypeId);
+    const interval = type ? getShiftInterval(item.date, type) : null;
+    return count + (interval ? findConflicts(interval, taskBusy).conflicts.length : 0);
+  }, 0), [preview, taskBusy, typesById]);
 
   useEffect(() => {
     const onOpen = (event: Event) => {
@@ -34,6 +49,7 @@ export default function ShiftManagerModal() {
       setDate(detail?.date || toLocalDateKey(new Date()));
       setMode(detail?.mode || 'single');
       setPreview([]);
+      setConfirmedConflicts(false);
       setOpen(true);
       void refreshShifts();
     };
@@ -52,12 +68,15 @@ export default function ShiftManagerModal() {
     setPattern(['D7', 'N7', 'N7', 'OFF'].map((code) => byCode.get(code)).filter((id): id is string => !!id));
   }, [enabledTypes, open, pattern.length]);
 
+  useEffect(() => setConfirmedConflicts(false), [date, selectedTypeId, preview]);
+
   const overwriteCount = preview.filter((item) => {
     const existing = assignments[item.date];
     return !!existing && existing.shiftTypeId !== item.shiftTypeId;
   }).length;
 
   const saveSingle = async () => {
+    if (singleConflicts.length > 0 && !confirmedConflicts) return;
     setSaving(true);
     try {
       if (selectedTypeId) await setShiftAssignment({ date, shiftTypeId: selectedTypeId });
@@ -81,6 +100,7 @@ export default function ShiftManagerModal() {
 
   const applyPattern = async () => {
     if (preview.length === 0) return;
+    if (patternConflictCount > 0 && !confirmedConflicts) return;
     setSaving(true);
     try {
       await setShiftAssignments(preview);
@@ -142,9 +162,10 @@ export default function ShiftManagerModal() {
                 <span className="block text-xs text-gray-500 dark:text-gray-300">assignment 삭제</span>
               </button>
             </div>
+            {singleConflicts.length > 0 && <ShiftConflictWarning count={singleConflicts.length} confirmed={confirmedConflicts} onConfirm={setConfirmedConflicts} />}
             <div className="flex justify-end gap-2 pt-2">
               <button className="btn" onClick={() => setOpen(false)}>취소</button>
-              <button className="btn btn-primary min-h-11" disabled={saving} onClick={saveSingle}>{saving ? '저장 중…' : '저장'}</button>
+              <button className="btn btn-primary min-h-11" disabled={saving || (singleConflicts.length > 0 && !confirmedConflicts)} onClick={saveSingle}>{saving ? '저장 중…' : '저장'}</button>
             </div>
           </div>
         ) : (
@@ -191,16 +212,24 @@ export default function ShiftManagerModal() {
                   {preview.map((item) => <div key={item.date} className="flex items-center justify-between py-2 text-sm"><span>{item.date}</span><span className="font-semibold">{typesById.get(item.shiftTypeId)?.code}</span></div>)}
                 </div>
                 <p className="mt-3 text-xs text-gray-500">아래 적용 버튼을 누르면 위 Preview대로 저장됩니다.</p>
+                {patternConflictCount > 0 && <div className="mt-3"><ShiftConflictWarning count={patternConflictCount} confirmed={confirmedConflicts} onConfirm={setConfirmedConflicts} /></div>}
               </div>
             )}
 
             <div className="flex justify-end gap-2">
               <button className="btn" onClick={() => setOpen(false)}>취소</button>
-              <button className="btn btn-primary min-h-11" disabled={saving || preview.length === 0} onClick={applyPattern}>{saving ? '저장 중…' : '패턴 적용'}</button>
+              <button className="btn btn-primary min-h-11" disabled={saving || preview.length === 0 || (patternConflictCount > 0 && !confirmedConflicts)} onClick={applyPattern}>{saving ? '저장 중…' : '패턴 적용'}</button>
             </div>
           </div>
         )}
       </div>
     </div>
   );
+}
+
+function ShiftConflictWarning({ count, confirmed, onConfirm }: { count: number; confirmed: boolean; onConfirm: (value: boolean) => void }) {
+  return <label className="flex w-full cursor-pointer items-start gap-2 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
+    <input className="mt-0.5" type="checkbox" checked={confirmed} onChange={(event) => onConfirm(event.target.checked)} />
+    <span>근무와 기존 일정 {count}개가 겹칩니다. 충돌을 확인하고 적용합니다.</span>
+  </label>;
 }
