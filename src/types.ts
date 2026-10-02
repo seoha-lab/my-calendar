@@ -9,6 +9,7 @@ export interface Task {
   title: string;
   category?: EventCategory; // Legacy records default to other; colors belong to the UI theme.
   description?: string;
+  location?: string;
   stage: Stage;
   checked: boolean;
   completedAt?: string;    // ISO when marked done

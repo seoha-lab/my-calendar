@@ -2,7 +2,7 @@
 import { t, interpolate } from '@/lib/i18n';
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { parseQuickInput, extractDateTimeHints, ParsedHint } from '@/lib/nlp';
+import { containsKorean, parseKoreanInput, parseQuickInput, extractDateTimeHints, type ParsedHint, type ParsedKoreanInput } from '@/lib/nlp';
 import { z } from 'zod';
 import { useStore } from '@/store';
 import { toast } from '@/lib/toast';
@@ -11,6 +11,7 @@ import { Loader2, Trash2, Wand2, ListPlus, Plus } from 'lucide-react';
 import CategorySelect from './CategorySelect';
 import type { EventCategory } from '@/lib/calendar/categories';
 import DateTimePicker from '@/components/DateTimePicker';
+import QuickAddPreview from '@/components/QuickAddPreview';
 
 const schema = z.object({ title: z.string().min(1) });
 
@@ -22,6 +23,7 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
   const [error, setError] = useState<string | null>(null);
   const [hints, setHints] = useState<ParsedHint[]>([]);
   const [mode, setMode] = useState<'quick'|'notes'>('quick');
+  const [preview, setPreview] = useState<ParsedKoreanInput | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const notesRef = useRef<HTMLTextAreaElement | null>(null);
   const createTask = useStore((s) => s.createTask);
@@ -44,6 +46,7 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
     if (open) {
       setText(initialText || '');
       setCategory('other');
+      setPreview(null);
       setMode(initialMode || 'quick');
       inputRef.current?.focus();
     }
@@ -81,6 +84,11 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (containsKorean(text)) {
+      setError(null);
+      setPreview(parseKoreanInput(text, new Date()));
+      return;
+    }
     const { task, errors } = parseQuickInput(text);
     if (errors?.length) {
       setError(errors.join(', '));
@@ -170,9 +178,11 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
   if (!open) return null;
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/40 dark:bg-black/60 backdrop-blur-sm flex items-start justify-center p-4" onClick={() => { setText(''); onClose(); }}>
-      <div onClick={(e) => e.stopPropagation()} className="card w-full max-w-3xl p-4">
+      <div onClick={(e) => e.stopPropagation()} className="card max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto p-4 sm:p-5">
 
-        {mode === 'quick' && (
+        {preview && <QuickAddPreview value={preview} onChange={setPreview} onBack={() => setPreview(null)} onSaved={() => { setText(''); setPreview(null); onClose(); }} />}
+
+        {mode === 'quick' && !preview && (
           <form onSubmit={submit}>
             <div className="mb-3"><CategorySelect value={category} onChange={setCategory} /></div>
             <div className="flex items-center gap-2">

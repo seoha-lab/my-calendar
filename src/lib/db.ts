@@ -55,7 +55,8 @@ async function ensureReady() {
     const cols = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'PRAGMA table_info(tasks);', params: [] });
     const shiftTables = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('shift_types','shift_assignments');", params: [] });
     const hasCompletedAt = Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === 'completedAt');
-    if (!hasCompletedAt || shiftTables.length !== 2) {
+    const hasLocation = Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === 'location');
+    if (!hasCompletedAt || !hasLocation || shiftTables.length !== 2) {
       await call({ id: crypto.randomUUID(), type: 'migrate' });
     }
   }
@@ -68,6 +69,7 @@ function rowToTask(row: any): Task {
     title: String(row.title),
     category: normalizeCategory(row.category),
     description: row.description ?? undefined,
+    location: row.location ?? undefined,
     stage: row.stage as Stage,
     checked: !!row.checked,
     completedAt: row.completedAt ?? undefined,

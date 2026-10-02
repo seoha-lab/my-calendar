@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
+  location TEXT,
   stage TEXT NOT NULL CHECK(stage IN ('todo','in-progress','done')),
   checked INTEGER NOT NULL DEFAULT 0,
   completedAt TEXT,
@@ -145,12 +146,14 @@ self.onmessage = async (e: MessageEvent<Message>) => {
           }
           const hasColor = Array.isArray(cols) && cols.some((r) => String((r as any).name || '') === 'color');
           if (hasColor) {
+            const hasLocation = cols.some((r) => String((r as any).name || '') === 'location');
             dbi.exec('BEGIN;');
             dbi.exec(`
 CREATE TABLE IF NOT EXISTS tasks__new (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
+  location TEXT,
   stage TEXT NOT NULL CHECK(stage IN ('todo','in-progress','done')),
   checked INTEGER NOT NULL DEFAULT 0,
   completedAt TEXT,
@@ -168,8 +171,8 @@ CREATE TABLE IF NOT EXISTS tasks__new (
   sortOrder REAL NOT NULL DEFAULT 0
 );
 `);
-            dbi.exec(`INSERT INTO tasks__new (id,title,description,stage,checked,completedAt,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,createdAt,updatedAt,calendarId,sortOrder)
-SELECT id,title,description,stage,checked,completedAt,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,createdAt,updatedAt,calendarId,sortOrder FROM tasks;`);
+            dbi.exec(`INSERT INTO tasks__new (id,title,description,location,stage,checked,completedAt,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,createdAt,updatedAt,calendarId,sortOrder)
+SELECT id,title,description,${hasLocation ? 'location' : 'NULL'},stage,checked,completedAt,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,createdAt,updatedAt,calendarId,sortOrder FROM tasks;`);
             dbi.exec('DROP TABLE tasks;');
             dbi.exec('ALTER TABLE tasks__new RENAME TO tasks;');
             dbi.exec('CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage);');
@@ -188,6 +191,12 @@ SELECT id,title,description,stage,checked,completedAt,start,end,allDay,isEvent,h
         const categoryColumns = dbi.exec({ sql: 'PRAGMA table_info(tasks);', returnValue: 'resultRows', rowMode: 'object' }) as { name: string }[];
         if (!categoryColumns.some((column) => column.name === 'category')) {
           dbi.exec("ALTER TABLE tasks ADD COLUMN category TEXT NOT NULL DEFAULT 'other';");
+        }
+
+        // Phase 7: additive, repeatable event location migration.
+        const locationColumns = dbi.exec({ sql: 'PRAGMA table_info(tasks);', returnValue: 'resultRows', rowMode: 'object' }) as { name: string }[];
+        if (!locationColumns.some((column) => column.name === 'location')) {
+          dbi.exec('ALTER TABLE tasks ADD COLUMN location TEXT;');
         }
 
         // Backfill: for any task with start/end but no task_ranges rows, create one
