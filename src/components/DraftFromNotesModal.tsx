@@ -137,7 +137,7 @@ export default function DraftFromNotesModal({ open, onClose }: Props) {
         {view === 'input' && (
           <div className="space-y-3">
             <p className="text-sm text-gray-600 dark:text-gray-300">{t("Bulk Add: Paste items or notes. I’ll detect tasks, events, deadlines, and subtasks.")}</p>
-            <div className="rounded-2xl border border-dashed border-gray-300 dark:border-slate-700 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900/80 dark:to-slate-900/60 shadow-inner backdrop-blur-md">
+            <div className="rounded-2xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
               <textarea
                 className="w-full h-48 resize-y px-3 py-2 rounded-2xl bg-transparent border-0 outline-none ring-0 shadow-none placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-gray-300 dark:focus-visible:ring-slate-600"
                 placeholder="E.g.\n– Kickoff Monday 10–11am\n– Ship homepage by Friday; subtasks: hero copy, screenshots, QA\n– Follow up with Alice next week"
