@@ -76,6 +76,8 @@ export interface ShiftAssignment {
 export interface BusyInterval {
   source: 'task' | 'shift';
   sourceId: string;
+  title: string;
   start: Date;
   end: Date;
+  category?: EventCategory;
 }

@@ -1,11 +1,14 @@
 'use client';
 
 import { AlertTriangle, ArrowLeft, CalendarCheck2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { localDateTimeToISO, isEndOnNextDay, type ParsedEvent, type ParsedKoreanInput, type ParsedShift } from '@/lib/nlp';
 import { useStore } from '@/store';
 import { toast } from '@/lib/toast';
 import CategorySelect from './CategorySelect';
+import { findConflicts, getCombinedBusyIntervals } from '@/lib/scheduling';
+import { getShiftInterval } from '@/lib/shifts';
+import type { BusyInterval } from '@/types';
 
 type Props = {
   value: ParsedKoreanInput;
@@ -18,14 +21,34 @@ export default function QuickAddPreview({ value, onChange, onBack, onSaved }: Pr
   const createTask = useStore((state) => state.createTask);
   const setShiftAssignment = useStore((state) => state.setShiftAssignment);
   const shiftTypes = useStore((state) => state.shiftTypes);
+  const tasks = useStore((state) => state.tasks);
+  const shiftAssignments = useStore((state) => state.shiftAssignments);
   const [confirmedAmbiguities, setConfirmedAmbiguities] = useState(false);
+  const [confirmedConflicts, setConfirmedConflicts] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shiftType = useMemo(() => value.kind === 'shift' ? shiftTypes.find((type) => type.code === value.shiftCode) : undefined, [shiftTypes, value]);
+  const conflicts = useMemo(() => {
+    let candidate: Pick<BusyInterval, 'start' | 'end'> | undefined;
+    let exclude: { source: BusyInterval['source']; sourceId: string } | undefined;
+    try {
+      if (value.kind === 'event' && value.date && value.startTime && value.endTime) {
+        candidate = { start: new Date(localDateTimeToISO(value.date, value.startTime)), end: new Date(localDateTimeToISO(value.date, value.endTime, isEndOnNextDay(value.startTime, value.endTime))) };
+      } else if (value.kind === 'shift' && value.date && shiftType) {
+        candidate = getShiftInterval(value.date, shiftType) ?? undefined;
+        const existing = shiftAssignments[value.date];
+        if (existing) exclude = { source: 'shift', sourceId: existing.id };
+      }
+    } catch {}
+    if (!candidate) return [];
+    return findConflicts(candidate, getCombinedBusyIntervals(Object.values(tasks), Object.values(shiftAssignments), shiftTypes), exclude).conflicts;
+  }, [value, shiftType, tasks, shiftAssignments, shiftTypes]);
+  const conflictKey = conflicts.map((item) => `${item.source}:${item.sourceId}:${item.start.toISOString()}`).join('|');
+  useEffect(() => setConfirmedConflicts(false), [conflictKey, value]);
   const requiredReady = value.kind === 'shift'
     ? Boolean(value.date && shiftType)
     : Boolean(value.title.trim() && value.date && value.startTime && value.endTime);
-  const canSave = requiredReady && (value.ambiguities.length === 0 || confirmedAmbiguities) && !saving;
+  const canSave = requiredReady && (value.ambiguities.length === 0 || confirmedAmbiguities) && (conflicts.length === 0 || confirmedConflicts) && !saving;
 
   const save = async () => {
     if (!canSave) return;
@@ -74,12 +97,21 @@ export default function QuickAddPreview({ value, onChange, onBack, onSaved }: Pr
       <div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-medium">확인이 필요한 항목</p><ul className="mt-1 list-disc space-y-1 pl-5">{value.ambiguities.map((item) => <li key={item}>{item}</li>)}</ul></div></div>
       <label className="mt-3 flex cursor-pointer items-center gap-2"><input type="checkbox" checked={confirmedAmbiguities} onChange={(event) => setConfirmedAmbiguities(event.target.checked)} /><span>입력값을 직접 확인했습니다.</span></label>
     </div>}
+    {conflicts.length > 0 && <ConflictWarning conflicts={conflicts} confirmed={confirmedConflicts} onConfirm={setConfirmedConflicts} />}
     {error && <p className="text-sm text-red-600">{error}</p>}
     <div className="flex justify-end">
       <button type="button" className="btn btn-primary inline-flex min-h-11 items-center gap-2 px-5 disabled:cursor-not-allowed disabled:opacity-50" disabled={!canSave} onClick={() => void save()}>
         <CalendarCheck2 className="h-4 w-4" />{saving ? '저장 중…' : value.kind === 'shift' ? '근무 저장' : '일정 저장'}
       </button>
     </div>
+  </div>;
+}
+
+function ConflictWarning({ conflicts, confirmed, onConfirm }: { conflicts: BusyInterval[]; confirmed: boolean; onConfirm: (value: boolean) => void }) {
+  const time = (date: Date) => date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950" data-testid="conflict-warning">
+    <div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div className="min-w-0"><p className="font-medium">기존 일정과 시간이 겹칩니다.</p><ul className="mt-2 space-y-2">{conflicts.map((item) => <li key={`${item.source}:${item.sourceId}`}><span className="block font-medium">{item.title}</span><span className="text-xs tabular-nums">{time(item.start)}–{item.end.getDate() !== item.start.getDate() ? '익일 ' : ''}{time(item.end)}</span></li>)}</ul></div></div>
+    <label className="mt-3 flex cursor-pointer items-center gap-2"><input type="checkbox" checked={confirmed} onChange={(event) => onConfirm(event.target.checked)} /><span>충돌을 확인했으며 그래도 저장합니다.</span></label>
   </div>;
 }
 

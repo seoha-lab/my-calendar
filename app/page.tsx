@@ -6,11 +6,14 @@ import CalendarView from '@/components/CalendarView';
 import TaskBoard from '@/components/TaskBoard';
 import { useStore } from '@/store';
 import Footer from '@/components/Footer';
+import FreeTimePanel from '@/components/FreeTimePanel';
+import { toLocalDateKey } from '@/lib/shifts';
 
 export default function Page() {
   const init = useStore((s) => s.init);
   const createFollowUp = useStore((s) => s.createFollowUp);
   const [split, setSplit] = useState(70); // percent for calendar height (larger calendar)
+  const [selectedDate, setSelectedDate] = useState(() => toLocalDateKey(new Date()));
   const dragging = useRef(false);
 
   useEffect(() => {
@@ -45,6 +48,12 @@ export default function Page() {
     };
   }, [createFollowUp]);
 
+  useEffect(() => {
+    const selectDate = (event: Event) => setSelectedDate((event as CustomEvent<{ date: string }>).detail.date);
+    window.addEventListener('calendar-date-selected', selectDate as EventListener);
+    return () => window.removeEventListener('calendar-date-selected', selectDate as EventListener);
+  }, []);
+
   // Persist split value
   useEffect(() => {
     try {
@@ -67,6 +76,7 @@ export default function Page() {
           <TaskBoard />
         </div>
       </div>
+      <FreeTimePanel date={selectedDate} />
       <div>
         <Footer />
       </div>

@@ -13,6 +13,7 @@ import CategorySelect from './CategorySelect';
 import DateTimePicker from '@/components/DateTimePicker';
 import { SUBTASKS_SYSTEM_PROMPT } from '@/lib/prompts';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
+import { findConflicts, getCombinedBusyIntervals } from '@/lib/scheduling';
 
 type Props = { open: boolean; taskId?: string | null; highlightRangeId?: string; onClose: () => void };
 
@@ -277,6 +278,9 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
 
 function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highlightRangeId?: string }) {
   const task = useStore((s) => s.tasks[taskId]);
+  const tasks = useStore((s) => s.tasks);
+  const shiftTypes = useStore((s) => s.shiftTypes);
+  const shiftAssignments = useStore((s) => s.shiftAssignments);
   const addRange = useStore((s) => s.addRange);
   const updateRange = useStore((s) => s.updateRange);
   const updateTask = useStore((s) => s.updateTask);
@@ -307,10 +311,19 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
     setDraftAllDay(false);
   };
   const cancelAdd = () => { setAdding(false); };
+  const confirmConflicts = (start: string, end: string): boolean => {
+    const candidate = { start: new Date(start), end: new Date(end) };
+    if (!(candidate.start < candidate.end)) return true;
+    const result = findConflicts(candidate, getCombinedBusyIntervals(Object.values(tasks), Object.values(shiftAssignments), shiftTypes), { source: 'task', sourceId: taskId });
+    if (!result.hasConflict) return true;
+    const names = result.conflicts.slice(0, 4).map((item) => `• ${item.title}`).join('\n');
+    return window.confirm(`기존 일정과 시간이 겹칩니다.\n${names}\n\n그래도 저장하시겠습니까?`);
+  };
   const saveAdd = async () => {
     const s = draftStart;
     const e = draftEnd;
     if (!s || !e) return;
+    if (!confirmConflicts(s, e)) return;
     await addRange(taskId, { start: s, end: e, allDay: draftAllDay });
     setAdding(false);
   };
@@ -475,6 +488,8 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
                     <div>
                       <label className="text-xs text-gray-500">{t("From")}</label>
                       <DateTimePicker value={r.start} onChange={async (iso) => {
+                        if (!iso) return;
+                        if (!confirmConflicts(iso, r.end)) return;
                         if (r.id === 'primary') await updateTask(taskId, { start: iso });
                         else await updateRange(r.id, { start: iso });
                       }} dateOnly={!!r.allDay} />
@@ -482,6 +497,8 @@ function RangesTimeline({ taskId, highlightRangeId }: { taskId: string; highligh
                     <div>
                       <label className="text-xs text-gray-500">{t("To")}</label>
                       <DateTimePicker value={r.end} onChange={async (iso) => {
+                        if (!iso) return;
+                        if (!confirmConflicts(r.start, iso)) return;
                         if (r.id === 'primary') await updateTask(taskId, { end: iso });
                         else await updateRange(r.id, { end: iso });
                       }} dateOnly={!!r.allDay} />

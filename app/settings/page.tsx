@@ -4,6 +4,7 @@ import { t, interpolate } from '@/lib/i18n';
 import { useEffect, useState } from 'react';
 import CalendarThemeSettings from '@/components/CalendarThemeSettings';
 import ShiftSettings from '@/components/ShiftSettings';
+import FreeTimeSettings from '@/components/FreeTimeSettings';
 import { normalizeCategory } from '@/lib/calendar/categories';
 import ExportModal from '@/components/ExportModal';
 import { useStore } from '@/store';
@@ -93,6 +94,7 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CalendarThemeSettings />
         <ShiftSettings />
+        <FreeTimeSettings />
         {/* AI Assistant */}
         <section className="card p-4 space-y-3">
           <div>
