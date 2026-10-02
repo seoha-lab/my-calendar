@@ -1,11 +1,15 @@
 'use client';
+import { t } from '@/lib/i18n';
+
 import dynamic from 'next/dynamic';
 import interactionPlugin, { Draggable } from '@fullcalendar/interaction';
+import koLocale from '@fullcalendar/core/locales/ko';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@/store';
-import { setAppBackgroundByDate } from '@/lib/app-background';
+import { normalizeCategory } from '@/lib/calendar/categories';
+import { messages } from '@/lib/i18n';
 
 const FullCalendar = dynamic(() => import('@fullcalendar/react'), { ssr: false });
 const FullCalendarAny: any = FullCalendar;
@@ -122,6 +126,7 @@ export default function CalendarView() {
           end: r.end,
           allDay: !!r.allDay,
           extendedProps: {
+            category: normalizeCategory(t.category),
             taskId: t.id,
             rangeId: String(r.id),
             stage: t.stage,
@@ -140,23 +145,24 @@ export default function CalendarView() {
     <div className="p-2 h-full overflow-hidden calendar-shell min-w-0 w-full min-h-[640px] relative rounded-2xl bg-transparent">
       <FullCalendarAny
         ref={calendarRef}
+        locale={koLocale}
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView="timeGridFourDay"
+        initialView={typeof window !== 'undefined' && window.innerWidth < 640 ? 'timeGridDay' : 'timeGridFourDay'}
         views={{
-          timeGridFourDay: { type: 'timeGrid', duration: { days: 4 }, buttonText: '4 days' },
+          timeGridFourDay: { type: 'timeGrid', duration: { days: 4 }, buttonText: '4일' },
         }}
         buttonText={{
-          today: 'today',
-          dayGridMonth: 'month',
-          timeGridWeek: 'week',
-          timeGridDay: 'day',
-          timeGridFourDay: '4 days',
+          today: '오늘',
+          dayGridMonth: '월',
+          timeGridWeek: '주',
+          timeGridDay: '일',
+          timeGridFourDay: '4일',
         }}
         dayHeaderFormat={{ weekday: 'short' }}
         dayHeaderContent={(arg: any) => {
           try {
             const d = arg.date as Date;
-            const wd = d.toLocaleDateString([], { weekday: 'short' });
+            const wd = d.toLocaleDateString('ko-KR', { weekday: 'short' });
             const n = d.getDate();
             const now = new Date();
             const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
@@ -179,7 +185,7 @@ export default function CalendarView() {
           const ep: any = arg.event.extendedProps || {};
           const key = ep.taskId || String(arg.event.id);
           const base = creatingIds.current.has(key) ? 'fc-event-minimal fc-event-creating' : 'fc-event-minimal';
-          return ep.hasMultiRanges ? base + ' fc-event-has-multi' : base;
+          return `${base} category-${normalizeCategory(ep.category)}${ep.hasMultiRanges ? ' fc-event-has-multi' : ''}`;
         }}
         eventContent={(arg: any) => {
           const ep: any = arg.event.extendedProps || {};
@@ -196,7 +202,7 @@ export default function CalendarView() {
           if (compact) {
             return (
               <div className="flex items-center gap-1 text-xs leading-tight w-full">
-                <input aria-label="Mark done" type="checkbox" className="checkbox-circle" checked={!!ep.checked} onChange={(e) => { e.stopPropagation(); toggleChecked(ep.taskId || String(arg.event.id).split(':')[0]); }} onClick={(e) => e.stopPropagation()} />
+                <input aria-label={t("Mark done")} type="checkbox" className="checkbox-circle" checked={!!ep.checked} onChange={(e) => { e.stopPropagation(); toggleChecked(ep.taskId || String(arg.event.id).split(':')[0]); }} onClick={(e) => e.stopPropagation()} />
                 <span className={`truncate ${strike}`}>{arg.event.title}</span>
                 {total > 0 && <span className="fc-pill">{done}/{total}</span>}
               </div>
@@ -205,7 +211,7 @@ export default function CalendarView() {
           return (
             <div className="flex flex-col h-full w-full">
               <div className="fc-event-body flex items-start gap-2 flex-1 min-h-0 overflow-hidden">
-                <input aria-label="Mark done" type="checkbox" className="checkbox-circle" checked={!!ep.checked} onChange={(e) => { e.stopPropagation(); toggleChecked(ep.taskId || String(arg.event.id).split(':')[0]); }} onClick={(e) => e.stopPropagation()} />
+                <input aria-label={t("Mark done")} type="checkbox" className="checkbox-circle" checked={!!ep.checked} onChange={(e) => { e.stopPropagation(); toggleChecked(ep.taskId || String(arg.event.id).split(':')[0]); }} onClick={(e) => e.stopPropagation()} />
                 <span className={`fc-event-title ${strike}`}>{arg.event.title}</span>
                 {total > 0 && <span className="fc-pill">{done}/{total}</span>}
               </div>
@@ -217,16 +223,7 @@ export default function CalendarView() {
             </div>
           );
         }}
-        datesSet={(arg: any) => {
-          try {
-            const api = calendarRef.current?.getApi?.();
-            const anchor = api?.getDate?.() as Date | undefined;
-            if (anchor instanceof Date && !isNaN(anchor.getTime())) {
-              const m = anchor.getMonth();
-              setAppBackgroundByDate(anchor);
-              try { preloadMonthBackgrounds(m); } catch {}
-            }
-          } catch {}
+        datesSet={() => {
           const api = calendarRef.current?.getApi?.();
           if (!api) return;
           const viewType = api.view?.type;
@@ -345,9 +342,9 @@ export default function CalendarView() {
             const e = info.event.end;
             if (s && e) {
               const opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' };
-              const range = `${s.toLocaleString([], opts)} – ${e.toLocaleString([], opts)}`;
-              el.title = range;
-              try { el.setAttribute('aria-label', `${info.event.title}: ${range}`); } catch {}
+              const range = `${s.toLocaleString('ko-KR', opts)} – ${e.toLocaleString('ko-KR', opts)}`;
+              el.title = `${messages.categories[normalizeCategory(info.event.extendedProps.category)]} • ${range}`;
+              try { el.setAttribute('aria-label', `${info.event.title}, ${messages.categories[normalizeCategory(info.event.extendedProps.category)]}: ${range}`); } catch {}
             }
           } catch {}
         }}
@@ -366,12 +363,6 @@ export default function CalendarView() {
 function useEvents() {
   const tasks = useStore((s) => s.tasks);
   return useMemo(() => Object.values(tasks), [tasks]);
-}
-
-function bgForMonth(m: number): string {
-  const idx = (m + 1).toString().padStart(2, '0');
-  const dark = isDark();
-  return dark ? `/backgrounds/rich-dark/month-${idx}.svg` : `/backgrounds/rich/month-${idx}.svg`;
 }
 
 function colorFromStage(stage?: string): string {
@@ -408,14 +399,4 @@ function uiFromStage(stage?: string): { bg: string; border: string } {
 function isDark(): boolean {
   if (typeof document === 'undefined') return false;
   try { return document.documentElement.classList.contains('dark'); } catch { return false; }
-}
-
-function preloadMonthBackgrounds(m: number) {
-  if (typeof Image === 'undefined') return;
-  const months = [((m + 11) % 12), m, ((m + 1) % 12)];
-  for (const mm of months) {
-    const url = bgForMonth(mm);
-    const img = new Image();
-    img.src = url;
-  }
 }

@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n';
 import { parse, ParsedResult } from 'chrono-node';
 import { addHours } from 'date-fns';
 import { Task, Stage } from '@/types';
@@ -78,8 +79,8 @@ export function parseQuickInput(text: string): { task: Partial<Task>, errors?: s
   // Remaining as title if title not set
   if (!task.title) {
     const cleaned = remaining.replace(/\s{2,}/g, ' ').trim();
-    if (cleaned.length === 0) errors.push('Title required');
-    task.title = cleaned || 'Untitled';
+    if (cleaned.length === 0) errors.push(t("Title required"));
+    task.title = cleaned || t("Untitled");
   }
 
   // If isEvent but no date, default to now -> +1h timed event

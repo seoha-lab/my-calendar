@@ -149,6 +149,12 @@ SELECT id,title,description,stage,checked,completedAt,start,end,allDay,isEvent,h
         // Ensure index exists when no rebuild was needed and column already present
         try { dbi.exec('CREATE INDEX IF NOT EXISTS idx_tasks_completedAt ON tasks(completedAt);'); } catch {}
 
+        // Phase 2: additive, repeatable category migration. Never reset existing data.
+        const categoryColumns = dbi.exec({ sql: 'PRAGMA table_info(tasks);', returnValue: 'resultRows', rowMode: 'object' }) as { name: string }[];
+        if (!categoryColumns.some((column) => column.name === 'category')) {
+          dbi.exec("ALTER TABLE tasks ADD COLUMN category TEXT NOT NULL DEFAULT 'other';");
+        }
+
         // Backfill: for any task with start/end but no task_ranges rows, create one
         try {
           const missing: any[] = dbi.exec({

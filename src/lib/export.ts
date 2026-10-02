@@ -18,6 +18,7 @@ export function buildICS({ events, todos }: { events: Task[]; todos: Task[] }): 
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:${ev.id}@clarity.local`);
     lines.push(`SUMMARY:${escapeICS(ev.title)}`);
+    if (ev.category) lines.push(`CATEGORIES:${escapeICS(ev.category)}`);
     if (ev.description) lines.push(`DESCRIPTION:${escapeICS(ev.description)}`);
     if (ev.start) lines.push(`DTSTART:${toICSDate(ev.start)}`);
     if (ev.end) lines.push(`DTEND:${toICSDate(ev.end)}`);
@@ -27,6 +28,7 @@ export function buildICS({ events, todos }: { events: Task[]; todos: Task[] }): 
     lines.push('BEGIN:VTODO');
     lines.push(`UID:${td.id}@clarity.local`);
     lines.push(`SUMMARY:${escapeICS(td.title)}`);
+    if (td.category) lines.push(`CATEGORIES:${escapeICS(td.category)}`);
     if (td.description) lines.push(`DESCRIPTION:${escapeICS(td.description)}`);
     if (td.end) lines.push(`DUE:${toICSDate(td.end)}`);
     lines.push(`STATUS:${td.checked ? 'COMPLETED' : 'NEEDS-ACTION'}`);
@@ -42,7 +44,7 @@ export function downloadICS(ics: string, filenameBase: string) {
 }
 
 export function buildCSV(rows: Task[]): string {
-  const header = 'id,title,stage,start,end,checked,parentId,calendarId';
+  const header = 'id,title,stage,start,end,checked,parentId,calendarId,category';
   const escape = (val: string | number | boolean | null | undefined): string => {
     if (val == null) return '';
     const s = String(val);
@@ -51,7 +53,7 @@ export function buildCSV(rows: Task[]): string {
     }
     return s;
   };
-  const lines = rows.map((t) => [t.id, t.title, t.stage, t.start ?? '', t.end ?? '', t.checked, t.parentId ?? '', t.calendarId].map(escape).join(','));
+  const lines = rows.map((t) => [t.id, t.title, t.stage, t.start ?? '', t.end ?? '', t.checked, t.parentId ?? '', t.calendarId, t.category ?? 'other'].map(escape).join(','));
   return [header, ...lines].join('\n');
 }
 

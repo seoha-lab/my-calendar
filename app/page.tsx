@@ -1,4 +1,6 @@
 'use client';
+import { t } from '@/lib/i18n';
+
 import { useEffect, useRef, useState } from 'react';
 import CalendarView from '@/components/CalendarView';
 import TaskBoard from '@/components/TaskBoard';
@@ -60,7 +62,7 @@ export default function Page() {
         <div style={{ height: `${split}%` }} className="h-full">
           <CalendarView />
         </div>
-        <div id="splitter" className="splitter-handle" aria-label="Resize" />
+        <div id="splitter" className="splitter-handle" aria-label={t("Resize")} />
         <div style={{ height: `${100 - split}%` }} className="h-full">
           <TaskBoard />
         </div>

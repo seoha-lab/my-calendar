@@ -16,5 +16,7 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "lang": "ko-KR",
+  "description": "오프라인으로 사용하는 개인 일정과 할 일"
 }

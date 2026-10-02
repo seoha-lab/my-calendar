@@ -1,7 +1,10 @@
 'use client';
+import { t } from '@/lib/i18n';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { format, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameDay, isSameMonth } from 'date-fns';
+import { format } from '@/lib/i18n/date';
+import { addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameDay, isSameMonth } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 
 type Props = {
@@ -12,7 +15,7 @@ type Props = {
   dateOnly?: boolean;          // when true, pick date only (midnight local)
 };
 
-export default function DateTimePicker({ value, onChange, placeholder = 'Pick date…', className = '', dateOnly = false }: Props) {
+export default function DateTimePicker({ value, onChange, placeholder = t("Pick date…"), className = '', dateOnly = false }: Props) {
   const anchorRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const initialDate = useMemo(() => (value ? new Date(value) : new Date()), [value]);
@@ -69,14 +72,14 @@ export default function DateTimePicker({ value, onChange, placeholder = 'Pick da
   };
 
   const body = (
-    <div className="dtp-pop card p-2 shadow-xl">
+    <div className="dtp-pop card p-2">
       <div className="flex items-center justify-between mb-1.5">
-        <button className="btn btn-ghost h-8 w-8 p-0" onClick={() => setViewMonth(addMonths(viewMonth, -1))} aria-label="Previous month"><ChevronLeft className="w-4 h-4" /></button>
+        <button className="btn btn-ghost h-8 w-8 p-0" onClick={() => setViewMonth(addMonths(viewMonth, -1))} aria-label={t("Previous month")}><ChevronLeft className="w-4 h-4" /></button>
         <div className="font-semibold text-sm select-none">{format(viewMonth, 'MMMM yyyy')}</div>
-        <button className="btn btn-ghost h-8 w-8 p-0" onClick={() => setViewMonth(addMonths(viewMonth, 1))} aria-label="Next month"><ChevronRight className="w-4 h-4" /></button>
+        <button className="btn btn-ghost h-8 w-8 p-0" onClick={() => setViewMonth(addMonths(viewMonth, 1))} aria-label={t("Next month")}><ChevronRight className="w-4 h-4" /></button>
       </div>
       <div className="dtp-grid">
-        {['S','M','T','W','T','F','S'].map((d, i) => (<div key={`${d}-${i}`} className="dtp-wd">{d}</div>))}
+        {['일','월','화','수','목','금','토'].map((d, i) => (<div key={`${d}-${i}`} className="dtp-wd">{d}</div>))}
         {(() => {
           const cells: JSX.Element[] = [];
           const start = startOfWeek(startOfMonth(viewMonth));
@@ -100,7 +103,7 @@ export default function DateTimePicker({ value, onChange, placeholder = 'Pick da
 
       {!dateOnly && (
         <div className="mt-2">
-          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-1"><Clock className="w-3.5 h-3.5" /> Time</div>
+          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-1"><Clock className="w-3.5 h-3.5" /> {t("Time")}</div>
           <TimeSuggestInput date={temp} onChange={setTimeParts} />
         </div>
       )}
@@ -318,7 +321,7 @@ function buildTimes(step: number = 15): TimeItem[] {
     for (let m = 0; m < 60; m += s) {
       const ampm: 'AM'|'PM' = h < 12 ? 'AM' : 'PM';
       const h12 = (h % 12) === 0 ? 12 : h % 12;
-      const label = m === 0 ? `${h12} ${ampm}` : `${h12}:${pad2(m)} ${ampm}`;
+      const label = m === 0 ? `${ampm === 'AM' ? '오전' : '오후'} ${h12}시` : `${ampm === 'AM' ? '오전' : '오후'} ${h12}:${pad2(m)}`;
       out.push({ label, hour12: h12, minute: m, ampm });
     }
   }
@@ -326,6 +329,7 @@ function buildTimes(step: number = 15): TimeItem[] {
 }
 
 function parseTime(s: string, current: Date, step: number = 15): { hour12: number; minute: number; ampm: 'AM'|'PM' } | null {
+  s = s.replace(/^(오전|오후)\s*(.*)$/, (_, period: string, time: string) => `${time.replace('시', '')} ${period === '오전' ? 'am' : 'pm'}`);
   const str = String(s || '').trim().toLowerCase();
   if (!str) return null;
   const m = str.match(/^(\d{1,2})(?::?(\d{2}))?\s*(a|am|p|pm)?$/i);
