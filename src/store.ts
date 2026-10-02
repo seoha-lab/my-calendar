@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import { calendarService } from '@/lib/calendar';
+import { shiftService, type ShiftAssignmentInput } from '@/lib/shifts';
 import { addDays, addHours } from 'date-fns';
-import { CalendarSource, Stage, Task } from '@/types';
+import { CalendarSource, ShiftAssignment, ShiftType, Stage, Task } from '@/types';
 
 type State = {
   tasks: Record<string, Task>;
   calendars: CalendarSource[];
+  shiftTypes: ShiftType[];
+  shiftAssignments: Record<string, ShiftAssignment>;
   selectedTaskId?: string | null;
   initialized: boolean;
   search: string;
@@ -15,6 +18,7 @@ type State = {
 type Actions = {
   init: () => Promise<void>;
   refresh: () => Promise<void>;
+  refreshShifts: () => Promise<void>;
   setSelected: (id: string | null) => void;
   setSearch: (q: string) => void;
   setHideDone: (v: boolean) => void;
@@ -32,11 +36,16 @@ type Actions = {
   addRange: (taskId: string, input: { start: string; end: string; allDay?: boolean }) => Promise<Task>;
   updateRange: (rangeId: string, patch: { start?: string; end?: string; allDay?: boolean }) => Promise<Task>;
   deleteRange: (rangeId: string) => Promise<Task>;
+  setShiftAssignment: (input: ShiftAssignmentInput) => Promise<ShiftAssignment>;
+  setShiftAssignments: (inputs: ShiftAssignmentInput[]) => Promise<ShiftAssignment[]>;
+  deleteShiftAssignment: (date: string) => Promise<void>;
 };
 
 export const useStore = create<State & Actions>((set, get) => ({
   tasks: {},
   calendars: [],
+  shiftTypes: [],
+  shiftAssignments: {},
   selectedTaskId: null,
   initialized: false,
   search: '',
@@ -50,7 +59,12 @@ export const useStore = create<State & Actions>((set, get) => ({
   },
 
   refresh: async () => {
-    const [tasks, calendars] = await Promise.all([calendarService.listTasks(), calendarService.listCalendars()]);
+    const [tasks, calendars, shiftTypes, shiftAssignments] = await Promise.all([
+      calendarService.listTasks(),
+      calendarService.listCalendars(),
+      shiftService.listShiftTypes(),
+      shiftService.listShiftAssignments(),
+    ]);
     const map: Record<string, Task> = {};
     for (const t of tasks) {
       // Migrate any legacy 'in-progress' to 'todo'
@@ -62,7 +76,12 @@ export const useStore = create<State & Actions>((set, get) => ({
         map[t.id] = t;
       }
     }
-    set({ tasks: map, calendars });
+    set({ tasks: map, calendars, shiftTypes, shiftAssignments: Object.fromEntries(shiftAssignments.map((assignment) => [assignment.date, assignment])) });
+  },
+
+  refreshShifts: async () => {
+    const [shiftTypes, shiftAssignments] = await Promise.all([shiftService.listShiftTypes(), shiftService.listShiftAssignments()]);
+    set({ shiftTypes, shiftAssignments: Object.fromEntries(shiftAssignments.map((assignment) => [assignment.date, assignment])) });
   },
 
   setSelected: (id) => set({ selectedTaskId: id }),
@@ -185,6 +204,29 @@ export const useStore = create<State & Actions>((set, get) => ({
     const t = await calendarService.deleteRange(rangeId);
     set((s) => ({ tasks: { ...s.tasks, [t.id]: t } }));
     return t;
+  },
+
+  setShiftAssignment: async (input) => {
+    const assignment = await shiftService.setShiftAssignment(input);
+    set((state) => ({ shiftAssignments: { ...state.shiftAssignments, [assignment.date]: assignment } }));
+    return assignment;
+  },
+  setShiftAssignments: async (inputs) => {
+    const assignments = await shiftService.setShiftAssignments(inputs);
+    set((state) => {
+      const next = { ...state.shiftAssignments };
+      for (const assignment of assignments) next[assignment.date] = assignment;
+      return { shiftAssignments: next };
+    });
+    return assignments;
+  },
+  deleteShiftAssignment: async (date) => {
+    await shiftService.deleteShiftAssignment(date);
+    set((state) => {
+      const next = { ...state.shiftAssignments };
+      delete next[date];
+      return { shiftAssignments: next };
+    });
   },
 }));
 

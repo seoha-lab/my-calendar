@@ -43,6 +43,37 @@ async function main() {
   assert.equal(format(new Date(2026,8,27),'MMMM yyyy'), '2026년 9월');
   const task = {id:'legacy',title:'기존 일정',stage:'todo',checked:false,calendarId:'local',createdAt:'2026-09-27',updatedAt:'2026-09-27',start:new Date(2026,8,30,18,30).toISOString(),end:new Date(2026,9,1,6,30).toISOString()};
   assert.match(timeBadge(task,{fullDate:true}), /9월 30일.*10월 1일/);
+  const { getShiftInterval, addLocalDays, buildShiftPattern, shiftAssignmentToCalendarEvent } = load('src/lib/shifts/utils.ts');
+  const d7 = {id:'shift-d7',code:'D7',name:'데이',startTime:'06:30',endTime:'18:30',crossesMidnight:false,isOff:false,enabled:true,sortOrder:10};
+  const n7 = {id:'shift-n7',code:'N7',name:'나이트',startTime:'18:30',endTime:'06:30',crossesMidnight:true,isOff:false,enabled:true,sortOrder:20};
+  const off = {id:'shift-off',code:'OFF',name:'오프',startTime:null,endTime:null,crossesMidnight:false,isOff:true,enabled:true,sortOrder:30};
+  const d7Interval = getShiftInterval('2026-10-01', d7);
+  assert.deepEqual([d7Interval.start.getFullYear(),d7Interval.start.getMonth()+1,d7Interval.start.getDate(),d7Interval.start.getHours(),d7Interval.start.getMinutes()],[2026,10,1,6,30]);
+  assert.deepEqual([d7Interval.end.getFullYear(),d7Interval.end.getMonth()+1,d7Interval.end.getDate(),d7Interval.end.getHours(),d7Interval.end.getMinutes()],[2026,10,1,18,30]);
+  const n7Interval = getShiftInterval('2026-10-01', n7);
+  assert.deepEqual([n7Interval.start.getFullYear(),n7Interval.start.getMonth()+1,n7Interval.start.getDate(),n7Interval.start.getHours(),n7Interval.start.getMinutes()],[2026,10,1,18,30]);
+  assert.deepEqual([n7Interval.end.getFullYear(),n7Interval.end.getMonth()+1,n7Interval.end.getDate(),n7Interval.end.getHours(),n7Interval.end.getMinutes()],[2026,10,2,6,30]);
+  assert.equal(getShiftInterval('2026-10-01', off), null);
+  assert.deepEqual([getShiftInterval('2026-10-31', n7).end.getMonth()+1,getShiftInterval('2026-10-31', n7).end.getDate()],[11,1]);
+  assert.deepEqual([getShiftInterval('2026-12-31', n7).end.getFullYear(),getShiftInterval('2026-12-31', n7).end.getMonth()+1,getShiftInterval('2026-12-31', n7).end.getDate()],[2027,1,1]);
+  assert.equal(addLocalDays('2024-02-28',1),'2024-02-29');
+  assert.equal(addLocalDays('2024-02-28',2),'2024-03-01');
+  assert.equal(addLocalDays('2025-02-28',1),'2025-03-01');
+  assert.deepEqual(buildShiftPattern('2026-10-01',[d7.id,n7.id,n7.id,off.id],2),[
+    {date:'2026-10-01',shiftTypeId:d7.id},{date:'2026-10-02',shiftTypeId:n7.id},{date:'2026-10-03',shiftTypeId:n7.id},{date:'2026-10-04',shiftTypeId:off.id},
+    {date:'2026-10-05',shiftTypeId:d7.id},{date:'2026-10-06',shiftTypeId:n7.id},{date:'2026-10-07',shiftTypeId:n7.id},{date:'2026-10-08',shiftTypeId:off.id},
+  ]);
+  const assignment = {id:'assignment',date:'2026-10-01',shiftTypeId:n7.id,createdAt:'2026-09-30',updatedAt:'2026-09-30'};
+  const shiftEvent = shiftAssignmentToCalendarEvent(assignment,n7);
+  assert.equal(shiftEvent.extendedProps.category,'hospital');
+  assert.equal(new Date(shiftEvent.end).getDate(),2);
+  for (const theme of CALENDAR_THEMES) {
+    assert.equal(eventColors(theme.categoryColors[shiftEvent.extendedProps.category]).accent,theme.categoryColors.hospital);
+  }
+  const { getShiftBusyIntervals, getCombinedBusyIntervals } = load('src/lib/scheduling/busyIntervals.ts');
+  assert.equal(getShiftBusyIntervals([{...assignment,shiftTypeId:off.id}],[off]).length,0);
+  assert.equal(getShiftBusyIntervals([assignment],[n7]).length,1);
+  assert.equal(getCombinedBusyIntervals([task],[assignment],[n7]).length,2);
   const calls=[];
   const db = { listTasks:async()=>[{...task,ranges:[{start:task.start,end:task.end}]}], createTask:async(input)=>{calls.push(input);return input;}, updateTask:async(id,patch)=>{calls.push(patch);return patch;} };
   const { localCalendarProvider: provider } = load('src/lib/calendar/LocalCalendarProvider.ts', {'@/lib/db':{db}});
@@ -60,6 +91,7 @@ async function main() {
   const workerSource = fs.readFileSync(path.join(root,'workers/db.worker.ts'),'utf8');
   const schema = workerSource.match(/function migrateSQL\(\): string \{\s*return `([\s\S]*?)`;/)[1];
   sqlDB.exec(schema);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_types',returnValue:'resultRows',rowMode:'object'})[0].n,3);
   sqlDB.exec({sql:'INSERT INTO tasks(id,title,stage,checked,createdAt,updatedAt,calendarId) VALUES (?,?,?,?,?,?,?)',bind:['legacy','기존 일정','todo',0,'2026-09-27','2026-09-27','local']});
   sqlDB.exec({sql:'INSERT INTO task_ranges(id,taskId,start,end,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',bind:['range','legacy',task.start,task.end,'2026-09-27','2026-09-27']});
   const migration = workerSource.match(/dbi\.exec\("(ALTER TABLE tasks ADD COLUMN category[^\"]+)"\)/)[1];
@@ -69,7 +101,17 @@ async function main() {
   }
   assert.deepEqual(sqlDB.exec({sql:'SELECT title, category FROM tasks',returnValue:'resultRows',rowMode:'object'}).map(row => ({...row})),[{title:'기존 일정',category:'other'}]);
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM task_ranges',returnValue:'resultRows',rowMode:'object'})[0].n,1);
+  sqlDB.exec({sql:'INSERT INTO shift_assignments(id,date,shiftTypeId,createdAt,updatedAt) VALUES (?,?,?,?,?)',bind:['assignment','2026-10-01',d7.id,'now','now']});
+  sqlDB.exec({sql:`INSERT INTO shift_assignments(id,date,shiftTypeId,createdAt,updatedAt) VALUES (?,?,?,?,?)
+    ON CONFLICT(date) DO UPDATE SET shiftTypeId = excluded.shiftTypeId, updatedAt = excluded.updatedAt`,bind:['replacement','2026-10-01',n7.id,'later','later']});
+  assert.equal(sqlDB.exec({sql:'SELECT shiftTypeId FROM shift_assignments WHERE date = ?',bind:['2026-10-01'],returnValue:'resultRows',rowMode:'object'})[0].shiftTypeId,n7.id);
+  sqlDB.exec(schema);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM tasks',returnValue:'resultRows',rowMode:'object'})[0].n,1);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM task_ranges',returnValue:'resultRows',rowMode:'object'})[0].n,1);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_assignments',returnValue:'resultRows',rowMode:'object'})[0].n,1);
+  sqlDB.exec({sql:'DELETE FROM shift_assignments WHERE date = ?',bind:['2026-10-01']});
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_assignments',returnValue:'resultRows',rowMode:'object'})[0].n,0);
   sqlDB.close();
-  console.log('PASS: 48 theme contrast cases, category defaults, Korean dates, overnight range/provider, CSV/ICS, additive migration and repeat migration retaining legacy tasks/ranges.');
+  console.log('PASS: themes/categories, Korean dates, D7/N7/OFF intervals, month/year/leap boundaries, shift pattern, busy intervals, overwrite/delete, CSV/ICS, repeatable SQLite migration retaining legacy tasks/ranges.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
