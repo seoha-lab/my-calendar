@@ -17,6 +17,8 @@ export interface CalendarService extends CalendarProvider {
   deleteTask(id: string): Promise<void>;
   toggleCalendarEnabled(id: string, enabled: boolean): Promise<void>;
   addRange(taskId: string, input: Pick<TaskRange, 'start' | 'end' | 'allDay'>): Promise<Task>;
+  addRanges(taskId: string, inputs: Pick<TaskRange, 'start' | 'end' | 'allDay'>[]): Promise<Task>;
+  addRangesBatch(groups: { taskId: string; ranges: Pick<TaskRange, 'start' | 'end' | 'allDay'>[] }[]): Promise<Task[]>;
   updateRange(id: string, patch: Partial<Pick<TaskRange, 'start' | 'end' | 'allDay'>>): Promise<Task>;
   deleteRange(id: string): Promise<Task>;
 }

@@ -21,6 +21,8 @@ export const localCalendarProvider: CalendarService = {
   deleteTask: (id) => db.deleteTask(id),
   toggleCalendarEnabled: (id, enabled) => db.toggleCalendarEnabled(id, enabled),
   addRange: (id, input) => db.addRange(id, input),
+  addRanges: (id, inputs) => db.addRanges(id, inputs),
+  addRangesBatch: (groups) => db.addRangesBatch(groups),
   updateRange: (id, patch) => db.updateRange(id, patch),
   deleteRange: (id) => db.deleteRange(id),
 };

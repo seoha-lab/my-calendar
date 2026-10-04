@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { setupSWClient } from '@/lib/sw-client';
 import { toast } from '@/lib/toast';
 import { registerQuickAddOpen } from '@/lib/quickAdd';
+import AutoScheduleModal from '@/components/AutoScheduleModal';
 
 export default function QuickAddProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -52,6 +53,7 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
       {children}
       <QuickAdd open={open} initialText={initialText} initialMode={initialMode} onClose={() => setOpen(false)} />
       <ShiftManagerModal />
+      <AutoScheduleModal />
     </>
   );
 }

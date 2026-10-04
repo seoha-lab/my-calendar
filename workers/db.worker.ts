@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   title TEXT NOT NULL,
   description TEXT,
   location TEXT,
+  deadline TEXT,
+  estimatedMinutes INTEGER,
+  priority TEXT CHECK(priority IN ('high','medium','low')) DEFAULT 'medium',
   stage TEXT NOT NULL CHECK(stage IN ('todo','in-progress','done')),
   checked INTEGER NOT NULL DEFAULT 0,
   completedAt TEXT,
@@ -147,6 +150,9 @@ self.onmessage = async (e: MessageEvent<Message>) => {
           const hasColor = Array.isArray(cols) && cols.some((r) => String((r as any).name || '') === 'color');
           if (hasColor) {
             const hasLocation = cols.some((r) => String((r as any).name || '') === 'location');
+            const hasDeadline = cols.some((r) => String((r as any).name || '') === 'deadline');
+            const hasEstimatedMinutes = cols.some((r) => String((r as any).name || '') === 'estimatedMinutes');
+            const hasPriority = cols.some((r) => String((r as any).name || '') === 'priority');
             dbi.exec('BEGIN;');
             dbi.exec(`
 CREATE TABLE IF NOT EXISTS tasks__new (
@@ -154,6 +160,9 @@ CREATE TABLE IF NOT EXISTS tasks__new (
   title TEXT NOT NULL,
   description TEXT,
   location TEXT,
+  deadline TEXT,
+  estimatedMinutes INTEGER,
+  priority TEXT CHECK(priority IN ('high','medium','low')) DEFAULT 'medium',
   stage TEXT NOT NULL CHECK(stage IN ('todo','in-progress','done')),
   checked INTEGER NOT NULL DEFAULT 0,
   completedAt TEXT,
@@ -171,8 +180,8 @@ CREATE TABLE IF NOT EXISTS tasks__new (
   sortOrder REAL NOT NULL DEFAULT 0
 );
 `);
-            dbi.exec(`INSERT INTO tasks__new (id,title,description,location,stage,checked,completedAt,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,createdAt,updatedAt,calendarId,sortOrder)
-SELECT id,title,description,${hasLocation ? 'location' : 'NULL'},stage,checked,completedAt,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,createdAt,updatedAt,calendarId,sortOrder FROM tasks;`);
+            dbi.exec(`INSERT INTO tasks__new (id,title,description,location,deadline,estimatedMinutes,priority,stage,checked,completedAt,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,createdAt,updatedAt,calendarId,sortOrder)
+SELECT id,title,description,${hasLocation ? 'location' : 'NULL'},${hasDeadline ? 'deadline' : 'NULL'},${hasEstimatedMinutes ? 'estimatedMinutes' : 'NULL'},${hasPriority ? 'priority' : "'medium'"},stage,checked,completedAt,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,createdAt,updatedAt,calendarId,sortOrder FROM tasks;`);
             dbi.exec('DROP TABLE tasks;');
             dbi.exec('ALTER TABLE tasks__new RENAME TO tasks;');
             dbi.exec('CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage);');
@@ -198,6 +207,12 @@ SELECT id,title,description,${hasLocation ? 'location' : 'NULL'},stage,checked,c
         if (!locationColumns.some((column) => column.name === 'location')) {
           dbi.exec('ALTER TABLE tasks ADD COLUMN location TEXT;');
         }
+
+        // Phase 10: additive, repeatable task scheduling fields.
+        const schedulingColumns = dbi.exec({ sql: 'PRAGMA table_info(tasks);', returnValue: 'resultRows', rowMode: 'object' }) as { name: string }[];
+        if (!schedulingColumns.some((column) => column.name === 'deadline')) dbi.exec('ALTER TABLE tasks ADD COLUMN deadline TEXT;');
+        if (!schedulingColumns.some((column) => column.name === 'estimatedMinutes')) dbi.exec('ALTER TABLE tasks ADD COLUMN estimatedMinutes INTEGER;');
+        if (!schedulingColumns.some((column) => column.name === 'priority')) dbi.exec("ALTER TABLE tasks ADD COLUMN priority TEXT CHECK(priority IN ('high','medium','low')) DEFAULT 'medium';");
 
         // Backfill: for any task with start/end but no task_ranges rows, create one
         try {

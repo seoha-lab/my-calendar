@@ -56,7 +56,8 @@ async function ensureReady() {
     const shiftTables = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('shift_types','shift_assignments');", params: [] });
     const hasCompletedAt = Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === 'completedAt');
     const hasLocation = Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === 'location');
-    if (!hasCompletedAt || !hasLocation || shiftTables.length !== 2) {
+    const hasScheduling = ['deadline', 'estimatedMinutes', 'priority'].every((name) => Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === name));
+    if (!hasCompletedAt || !hasLocation || !hasScheduling || shiftTables.length !== 2) {
       await call({ id: crypto.randomUUID(), type: 'migrate' });
     }
   }
@@ -70,6 +71,9 @@ function rowToTask(row: any): Task {
     category: normalizeCategory(row.category),
     description: row.description ?? undefined,
     location: row.location ?? undefined,
+    deadline: row.deadline ?? undefined,
+    estimatedMinutes: row.estimatedMinutes == null ? undefined : Number(row.estimatedMinutes),
+    priority: row.priority === 'high' || row.priority === 'low' ? row.priority : 'medium',
     stage: row.stage as Stage,
     checked: !!row.checked,
     completedAt: row.completedAt ?? undefined,
@@ -331,6 +335,35 @@ export const db = {
     // Keep task.start/end in sync to represent last added range
     try { await call({ id: crypto.randomUUID(), type: 'run', sql: 'UPDATE tasks SET start = ?, end = ?, allDay = ?, updatedAt = ? WHERE id = ?', params: [input.start, input.end, input.allDay ? 1 : 0, now, taskId] }); } catch {}
     return await this.getTask(taskId);
+  },
+
+  async addRanges(taskId: string, inputs: { start: string; end: string; allDay?: boolean }[]): Promise<Task> {
+    await ensureReady();
+    if (inputs.length === 0) return await this.getTask(taskId);
+    const now = new Date().toISOString();
+    const statements = inputs.map((input) => ({
+      sql: 'INSERT INTO task_ranges(id, taskId, start, end, allDay, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?)',
+      params: [crypto.randomUUID(), taskId, input.start, input.end, input.allDay ? 1 : 0, now, now],
+    }));
+    const last = inputs[inputs.length - 1];
+    statements.push({ sql: 'UPDATE tasks SET start = ?, end = ?, allDay = ?, updatedAt = ? WHERE id = ?', params: [last.start, last.end, last.allDay ? 1 : 0, now, taskId] });
+    await call({ id: crypto.randomUUID(), type: 'batch', statements });
+    return await this.getTask(taskId);
+  },
+
+  async addRangesBatch(groups: { taskId: string; ranges: { start: string; end: string; allDay?: boolean }[] }[]): Promise<Task[]> {
+    await ensureReady();
+    const nonEmpty = groups.filter((group) => group.ranges.length > 0);
+    if (nonEmpty.length === 0) return [];
+    const now = new Date().toISOString();
+    const statements: { sql: string; params?: unknown[] }[] = [];
+    for (const group of nonEmpty) {
+      for (const range of group.ranges) statements.push({ sql: 'INSERT INTO task_ranges(id, taskId, start, end, allDay, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?)', params: [crypto.randomUUID(), group.taskId, range.start, range.end, range.allDay ? 1 : 0, now, now] });
+      const last = group.ranges[group.ranges.length - 1];
+      statements.push({ sql: 'UPDATE tasks SET start = ?, end = ?, allDay = ?, updatedAt = ? WHERE id = ?', params: [last.start, last.end, last.allDay ? 1 : 0, now, group.taskId] });
+    }
+    await call({ id: crypto.randomUUID(), type: 'batch', statements });
+    return await Promise.all(nonEmpty.map((group) => this.getTask(group.taskId)));
   },
 
   async updateRange(rangeId: string, patch: Partial<Pick<TaskRange, 'start'|'end'|'allDay'>>): Promise<Task> {

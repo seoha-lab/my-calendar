@@ -70,7 +70,7 @@ async function main() {
   for (const theme of CALENDAR_THEMES) {
     assert.equal(eventColors(theme.categoryColors[shiftEvent.extendedProps.category]).accent,theme.categoryColors.hospital);
   }
-  const { getShiftBusyIntervals, getCombinedBusyIntervals } = load('src/lib/scheduling/busyIntervals.ts');
+  const { getTaskBusyIntervals, getShiftBusyIntervals, getCombinedBusyIntervals } = load('src/lib/scheduling/busyIntervals.ts');
   assert.equal(getShiftBusyIntervals([{...assignment,shiftTypeId:off.id}],[off]).length,0);
   assert.equal(getShiftBusyIntervals([assignment],[n7]).length,1);
   assert.equal(getCombinedBusyIntervals([task],[assignment],[n7]).length,2);
@@ -105,6 +105,41 @@ async function main() {
   assert.equal(calculateFreeTime({date:'2026-10-01',dayStart:'07:00',dayEnd:'23:00',minimumMinutes:30,busyIntervals:getShiftBusyIntervals([{...assignment,shiftTypeId:off.id}],[off])}).totalFreeMinutes,960);
   const boundary = calculateFreeTime({date:'2026-10-02',dayStart:'07:00',dayEnd:'08:00',minimumMinutes:30,busyIntervals:[busy('short','2026-10-02T07:30:00+09:00','2026-10-02T08:00:00+09:00')]});
   assert.equal(boundary.free.length,1); assert.equal(boundary.free[0].durationMinutes,30);
+  const { calculateScheduledMinutes, calculateRemainingMinutes, rankTasksForScheduling, isSchedulableTask, scheduleTasks } = load('src/lib/scheduling/autoSchedule.ts');
+  const baseTask = (id,patch={}) => ({id,title:id,stage:'todo',checked:false,calendarId:'local',createdAt:`2026-10-0${id==='b'?1:2}`,updatedAt:'2026-10-01',priority:'medium',...patch});
+  const existingTask = baseTask('existing',{estimatedMinutes:120,deadline:new Date(2026,9,5,23).toISOString(),ranges:[{id:'r',taskId:'existing',start:new Date(2026,9,4,13).toISOString(),end:new Date(2026,9,4,14).toISOString()}]});
+  assert.equal(calculateScheduledMinutes(existingTask),60); assert.equal(calculateRemainingMinutes(existingTask),60);
+  assert.equal(isSchedulableTask(baseTask('missing-estimate',{deadline:new Date(2026,9,5,23).toISOString()}),new Date(2026,9,4)).ok,false);
+  assert.equal(isSchedulableTask(baseTask('missing-deadline',{estimatedMinutes:60}),new Date(2026,9,4)).ok,false);
+  assert.equal(isSchedulableTask(baseTask('completed',{estimatedMinutes:60,deadline:new Date(2026,9,5,23).toISOString(),checked:true}),new Date(2026,9,4)).ok,false);
+  assert.equal(isSchedulableTask(baseTask('past-deadline',{estimatedMinutes:60,deadline:new Date(2026,9,3,23).toISOString()}),new Date(2026,9,4)).ok,false);
+  assert.equal(isSchedulableTask(baseTask('invalid-deadline',{estimatedMinutes:60,deadline:'invalid'}),new Date(2026,9,4)).ok,false);
+  const prefs={dayStartTime:'09:00',dayEndTime:'15:00',minimumFreeMinutes:30};
+  const caseATask=baseTask('case-a',{estimatedMinutes:180,priority:'high',deadline:new Date(2026,9,5,23).toISOString()});
+  const caseABusy=[busy('morning-4','2026-10-04T09:00:00+09:00','2026-10-04T13:00:00+09:00'),busy('afternoon-5','2026-10-05T11:00:00+09:00','2026-10-05T15:00:00+09:00')];
+  const caseASchedule=scheduleTasks([caseATask],caseABusy,prefs,new Date(2026,9,4,8));
+  assert.equal(caseASchedule.fullyScheduled,true); assert.deepEqual(caseASchedule.results[0].blocks.map(block=>block.minutes),[120,60]);
+  const existingSchedule=scheduleTasks([existingTask],[...caseABusy,...getTaskBusyIntervals([existingTask])],prefs,new Date(2026,9,4,8));
+  assert.equal(existingSchedule.results[0].requiredMinutes,60); assert.equal(existingSchedule.results[0].scheduledMinutes,60);
+  const splitTask=baseTask('split',{estimatedMinutes:90,deadline:new Date(2026,9,4,12).toISOString()});
+  const splitBusy=[busy('gap1','2026-10-04T09:30:00+09:00','2026-10-04T10:00:00+09:00'),busy('gap2','2026-10-04T10:30:00+09:00','2026-10-04T11:00:00+09:00')];
+  const split=scheduleTasks([splitTask],splitBusy,{dayStartTime:'09:00',dayEndTime:'12:00',minimumFreeMinutes:30},new Date(2026,9,4,8));
+  assert.deepEqual(split.results[0].blocks.map(block=>block.minutes),[30,30,30]);
+  const insufficient=scheduleTasks([baseTask('shortage',{estimatedMinutes:120,deadline:new Date(2026,9,4,10).toISOString()})],[],{dayStartTime:'09:00',dayEndTime:'10:00',minimumFreeMinutes:30},new Date(2026,9,4,8));
+  assert.equal(insufficient.results[0].fullyScheduled,false); assert.equal(insufficient.results[0].shortageMinutes,60);
+  const exact=scheduleTasks([baseTask('exact',{estimatedMinutes:60,deadline:new Date(2026,9,4,10).toISOString()})],[],{dayStartTime:'09:00',dayEndTime:'10:00',minimumFreeMinutes:30},new Date(2026,9,4,8));
+  assert.equal(exact.results[0].fullyScheduled,true); assert.equal(exact.results[0].blocks[0].end.getHours(),10);
+  const pastExcluded=scheduleTasks([baseTask('past',{estimatedMinutes:60,deadline:new Date(2026,9,4,12).toISOString()})],[],{dayStartTime:'07:00',dayEndTime:'12:00',minimumFreeMinutes:30},new Date(2026,9,4,10,15));
+  assert.deepEqual([pastExcluded.results[0].blocks[0].start.getHours(),pastExcluded.results[0].blocks[0].start.getMinutes()],[10,15]);
+  const ranked=rankTasksForScheduling([baseTask('low',{priority:'low',deadline:new Date(2026,9,3).toISOString()}),baseTask('a',{priority:'high',deadline:new Date(2026,9,5).toISOString()}),baseTask('b',{priority:'high',deadline:new Date(2026,9,4).toISOString()})]);
+  assert.deepEqual(ranked.map(task=>task.id),['b','a','low']);
+  const multi=scheduleTasks([baseTask('a',{estimatedMinutes:60,priority:'high',deadline:new Date(2026,9,4,12).toISOString()}),baseTask('low',{estimatedMinutes:60,priority:'low',deadline:new Date(2026,9,4,12).toISOString()})],[],{dayStartTime:'09:00',dayEndTime:'12:00',minimumFreeMinutes:30},new Date(2026,9,4,8));
+  assert.equal(multi.results[0].taskId,'a'); assert.equal(multi.results[1].blocks[0].start.getTime(),multi.results[0].blocks[0].end.getTime());
+  const d7Schedule=scheduleTasks([baseTask('d7-task',{estimatedMinutes:60,deadline:new Date(2026,9,1,23).toISOString()})],getShiftBusyIntervals([{...assignment,shiftTypeId:d7.id}],[d7]),{dayStartTime:'07:00',dayEndTime:'23:00',minimumFreeMinutes:30},new Date(2026,9,1,7));
+  assert.deepEqual([d7Schedule.results[0].blocks[0].start.getHours(),d7Schedule.results[0].blocks[0].start.getMinutes()],[18,30]);
+  const yearBoundary=scheduleTasks([baseTask('year-boundary',{estimatedMinutes:60,deadline:new Date(2027,0,1,10).toISOString()})],[],{dayStartTime:'09:00',dayEndTime:'10:00',minimumFreeMinutes:30},new Date(2026,11,31,23,30));
+  assert.deepEqual([yearBoundary.results[0].blocks[0].start.getFullYear(),yearBoundary.results[0].blocks[0].start.getMonth()+1,yearBoundary.results[0].blocks[0].start.getDate()],[2027,1,1]);
+  assert.equal(findConflicts(multi.results[0].blocks[0],[busy('changed',multi.results[0].blocks[0].start.toISOString(),multi.results[0].blocks[0].end.toISOString())]).hasConflict,true);
   const reference = new Date(2026,9,2,10,0);
   const { parseKoreanInput, parseKoreanDate, parseKoreanTime, localDateTimeToISO } = load('src/lib/nlp/index.ts');
   assert.equal(parseKoreanDate('오늘',reference).date,'2026-10-02');
@@ -164,6 +199,8 @@ async function main() {
   const schema = workerSource.match(/function migrateSQL\(\): string \{\s*return `([\s\S]*?)`;/)[1];
   sqlDB.exec(schema);
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_types',returnValue:'resultRows',rowMode:'object'})[0].n,3);
+  const schedulingColumns=sqlDB.exec({sql:'PRAGMA table_info(tasks)',returnValue:'resultRows',rowMode:'object'}).map(column=>column.name);
+  assert.ok(['deadline','estimatedMinutes','priority'].every(column=>schedulingColumns.includes(column)));
   sqlDB.exec({sql:'INSERT INTO tasks(id,title,stage,checked,createdAt,updatedAt,calendarId) VALUES (?,?,?,?,?,?,?)',bind:['legacy','기존 일정','todo',0,'2026-09-27','2026-09-27','local']});
   sqlDB.exec({sql:'UPDATE tasks SET location = ? WHERE id = ?',bind:['학교','legacy']});
   sqlDB.exec({sql:'INSERT INTO task_ranges(id,taskId,start,end,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',bind:['range','legacy',task.start,task.end,'2026-09-27','2026-09-27']});
@@ -172,7 +209,7 @@ async function main() {
     const columns=sqlDB.exec({sql:'PRAGMA table_info(tasks)',returnValue:'resultRows',rowMode:'object'});
     if(!columns.some(c=>c.name==='category'))sqlDB.exec(migration);
   }
-  assert.deepEqual(sqlDB.exec({sql:'SELECT title, category FROM tasks',returnValue:'resultRows',rowMode:'object'}).map(row => ({...row})),[{title:'기존 일정',category:'other'}]);
+  assert.deepEqual(sqlDB.exec({sql:'SELECT title, category, priority FROM tasks',returnValue:'resultRows',rowMode:'object'}).map(row => ({...row})),[{title:'기존 일정',category:'other',priority:'medium'}]);
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM task_ranges',returnValue:'resultRows',rowMode:'object'})[0].n,1);
   sqlDB.exec({sql:'INSERT INTO shift_assignments(id,date,shiftTypeId,createdAt,updatedAt) VALUES (?,?,?,?,?)',bind:['assignment','2026-10-01',d7.id,'now','now']});
   sqlDB.exec({sql:`INSERT INTO shift_assignments(id,date,shiftTypeId,createdAt,updatedAt) VALUES (?,?,?,?,?)
@@ -186,6 +223,6 @@ async function main() {
   sqlDB.exec({sql:'DELETE FROM shift_assignments WHERE date = ?',bind:['2026-10-01']});
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_assignments',returnValue:'resultRows',rowMode:'object'})[0].n,0);
   sqlDB.close();
-  console.log('PASS: Korean NLP, interval conflicts/touching/self-exclusion, merge/clipping, D7/N7/OFF free time, previous-day N7, minimum duration, timezone, shifts and SQLite persistence.');
+  console.log('PASS: Task scheduling model/migration, remaining time, ranking, splitting, exact/partial/deadline/past handling, multi-task simulation, conflicts, shifts, timezone and SQLite preservation.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

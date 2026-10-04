@@ -59,11 +59,26 @@ export default function TaskCard({ task, onToggle, onOpen, showFullDate = false 
           <div className="flex items-center gap-2 mt-1">
             <CategoryBadge category={task.category} />
             {badge && <span className="text-xs px-2 py-0.5 rounded bg-white/70 text-gray-700 dark:bg-slate-700/50 dark:text-gray-200">{badge}</span>}
+            {task.deadline && <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-200">{deadlineBadge(task.deadline)}</span>}
+            {task.estimatedMinutes && <span className="text-xs text-gray-500">{formatMinutes(task.estimatedMinutes)}</span>}
+            {task.priority === 'high' && <span className="text-xs font-medium text-rose-600">높음</span>}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function formatMinutes(minutes: number): string { return minutes < 60 ? `${minutes}분` : `${Math.floor(minutes / 60)}시간${minutes % 60 ? ` ${minutes % 60}분` : ''}`; }
+
+function deadlineBadge(deadline: string): string {
+  const target = new Date(deadline);
+  if (!Number.isFinite(target.getTime())) return '마감 확인';
+  const today = new Date();
+  const left = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const right = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const days = Math.round((right.getTime() - left.getTime()) / 86400000);
+  return days === 0 ? '오늘 마감' : days > 0 ? `D-${days}` : `D+${Math.abs(days)}`;
 }
 
 function cardHueClassesByStage(_stage: Stage): string {

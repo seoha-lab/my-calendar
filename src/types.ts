@@ -1,6 +1,7 @@
 import type { EventCategory } from '@/lib/calendar/categories';
 
 export type Stage = 'todo' | 'done';
+export type TaskPriority = 'high' | 'medium' | 'low';
 
 export interface SubTask { id: string; title: string; done: boolean; }
 
@@ -10,6 +11,9 @@ export interface Task {
   category?: EventCategory; // Legacy records default to other; colors belong to the UI theme.
   description?: string;
   location?: string;
+  deadline?: string;
+  estimatedMinutes?: number;
+  priority?: TaskPriority;
   stage: Stage;
   checked: boolean;
   completedAt?: string;    // ISO when marked done
