@@ -3,6 +3,7 @@ import type { EventCategory } from '@/lib/calendar/categories';
 export type ParsedEvent = {
   kind: 'event';
   title: string;
+  timePeriod?: 'morning' | 'lunch' | 'evening' | 'night';
   date?: string;
   startTime?: string;
   endTime?: string;
@@ -26,4 +27,3 @@ export type ParsedShift = {
 export type ParsedKoreanInput = ParsedEvent | ParsedShift;
 
 export type TextSpan = { start: number; end: number; text: string };
-

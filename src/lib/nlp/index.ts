@@ -1,6 +1,7 @@
 export { parseKoreanInput } from './koreanParser';
 export { parseKoreanDate } from './dateParser';
 export { parseKoreanTime } from './timeParser';
+export type { KoreanTimePeriod } from './timeParser';
 export { parseLocation } from './locationParser';
 export { inferCategory } from './categoryParser';
 export { parseShiftInput } from './shiftParser';

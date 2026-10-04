@@ -117,15 +117,28 @@ function ConflictWarning({ conflicts, confirmed, onConfirm }: { conflicts: BusyI
 
 function EventFields({ value, onChange }: { value: ParsedEvent; onChange: (value: ParsedKoreanInput) => void }) {
   const patch = (next: Partial<ParsedEvent>) => onChange({ ...value, ...next });
+  const setStartTime = (startTime?: string) => {
+    const timeAmbiguities = /(정확한 시간을 입력|시작 시간을 선택|오전인지 오후인지|시간이 올바르지)/;
+    patch({
+      startTime,
+      endTime: startTime && !value.endTime ? addPreviewHour(startTime) : value.endTime,
+      ambiguities: startTime ? value.ambiguities.filter((item) => !timeAmbiguities.test(item)) : value.ambiguities,
+    });
+  };
   return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
     <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span>제목</span><input className="input" value={value.title} onChange={(event) => patch({ title: event.target.value })} placeholder="일정 제목" /></label>
     <label className="flex flex-col gap-1 text-sm"><span>날짜</span><input className="input" type="date" value={value.date ?? ''} onChange={(event) => patch({ date: event.target.value || undefined })} /></label>
     <CategorySelect value={value.category} onChange={(category) => patch({ category })} />
-    <label className="flex flex-col gap-1 text-sm"><span>시작시간</span><input className="input" type="time" value={value.startTime ?? ''} onChange={(event) => patch({ startTime: event.target.value || undefined })} /></label>
+    <label className="flex flex-col gap-1 text-sm"><span>시작시간</span><input className="input" type="time" value={value.startTime ?? ''} onChange={(event) => setStartTime(event.target.value || undefined)} /></label>
     <label className="flex flex-col gap-1 text-sm"><span>종료시간</span><input className="input" type="time" value={value.endTime ?? ''} onChange={(event) => patch({ endTime: event.target.value || undefined })} /></label>
     <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span>장소</span><input className="input" value={value.location ?? ''} onChange={(event) => patch({ location: event.target.value || undefined })} placeholder="장소 없음" /></label>
     <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span>메모</span><textarea className="input min-h-20 resize-y" value={value.note ?? ''} onChange={(event) => patch({ note: event.target.value || undefined })} placeholder="메모 없음" /></label>
   </div>;
+}
+
+function addPreviewHour(time: string): string {
+  const [hour, minute] = time.split(':').map(Number);
+  return `${String((hour + 1) % 24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 function ShiftFields({ value, onChange, shiftTypes }: { value: ParsedShift; onChange: (value: ParsedKoreanInput) => void; shiftTypes: ReturnType<typeof useStore.getState>['shiftTypes'] }) {
