@@ -7,11 +7,12 @@ import { z } from 'zod';
 import { useStore } from '@/store';
 import { toast } from '@/lib/toast';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
-import { Loader2, Trash2, Wand2, ListPlus, Plus } from 'lucide-react';
+import { CalendarClock, Loader2, Trash2, Wand2, ListPlus, Plus } from 'lucide-react';
 import CategorySelect from './CategorySelect';
 import type { EventCategory } from '@/lib/calendar/categories';
 import DateTimePicker from '@/components/DateTimePicker';
 import QuickAddPreview from '@/components/QuickAddPreview';
+import TaskSchedulingFields, { type TaskSchedulingValue } from '@/components/TaskSchedulingFields';
 
 const schema = z.object({ title: z.string().min(1) });
 
@@ -24,6 +25,8 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
   const [hints, setHints] = useState<ParsedHint[]>([]);
   const [mode, setMode] = useState<'quick'|'notes'>('quick');
   const [preview, setPreview] = useState<ParsedKoreanInput | null>(null);
+  const [showPlanning, setShowPlanning] = useState(false);
+  const [planning, setPlanning] = useState<TaskSchedulingValue>({ priority: 'medium' });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const notesRef = useRef<HTMLTextAreaElement | null>(null);
   const createTask = useStore((s) => s.createTask);
@@ -47,6 +50,8 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
       setText(initialText || '');
       setCategory('other');
       setPreview(null);
+      setShowPlanning(false);
+      setPlanning({ priority: 'medium' });
       setMode(initialMode || 'quick');
       inputRef.current?.focus();
     }
@@ -142,6 +147,9 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
       await createTask({
         title: task.title!,
         category,
+        deadline: planning.deadline,
+        estimatedMinutes: planning.estimatedMinutes,
+        priority: planning.priority ?? 'medium',
         description: task.description,
         stage: (task.stage ?? 'todo'),
         checked: task.checked ?? false,
@@ -221,6 +229,12 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
               </div>
               {/* No explicit button; Enter/Cmd+Enter submits */}
             </div>
+            <div className="mt-3">
+              <button type="button" className="btn inline-flex min-h-10 items-center gap-2" onClick={() => setShowPlanning((value) => !value)} aria-expanded={showPlanning}>
+                <CalendarClock className="h-4 w-4" />{showPlanning ? '계획 정보 닫기' : 'Task 계획 추가'}
+              </button>
+            </div>
+            {showPlanning && <div className="mt-3"><TaskSchedulingFields value={planning} onChange={(patch) => setPlanning((current) => ({ ...current, ...patch }))} /></div>}
             {error && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{error}</p>}
           </form>
         )}

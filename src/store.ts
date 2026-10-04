@@ -34,6 +34,8 @@ type Actions = {
   tasksByStage: (stage: Stage) => Task[];
   // Timeline ranges
   addRange: (taskId: string, input: { start: string; end: string; allDay?: boolean }) => Promise<Task>;
+  addRanges: (taskId: string, inputs: { start: string; end: string; allDay?: boolean }[]) => Promise<Task>;
+  addRangesBatch: (groups: { taskId: string; ranges: { start: string; end: string; allDay?: boolean }[] }[]) => Promise<Task[]>;
   updateRange: (rangeId: string, patch: { start?: string; end?: string; allDay?: boolean }) => Promise<Task>;
   deleteRange: (rangeId: string) => Promise<Task>;
   setShiftAssignment: (input: ShiftAssignmentInput) => Promise<ShiftAssignment>;
@@ -194,6 +196,16 @@ export const useStore = create<State & Actions>((set, get) => ({
     const t = await calendarService.addRange(taskId, input);
     set((s) => ({ tasks: { ...s.tasks, [taskId]: t } }));
     return t;
+  },
+  addRanges: async (taskId, inputs) => {
+    const task = await calendarService.addRanges(taskId, inputs);
+    set((state) => ({ tasks: { ...state.tasks, [taskId]: task } }));
+    return task;
+  },
+  addRangesBatch: async (groups) => {
+    const updated = await calendarService.addRangesBatch(groups);
+    set((state) => ({ tasks: { ...state.tasks, ...Object.fromEntries(updated.map((task) => [task.id, task])) } }));
+    return updated;
   },
   updateRange: async (rangeId, patch) => {
     const t = await calendarService.updateRange(rangeId, patch);

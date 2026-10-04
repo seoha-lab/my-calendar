@@ -30,7 +30,7 @@ export function buildICS({ events, todos }: { events: Task[]; todos: Task[] }): 
     lines.push(`SUMMARY:${escapeICS(td.title)}`);
     if (td.category) lines.push(`CATEGORIES:${escapeICS(td.category)}`);
     if (td.description) lines.push(`DESCRIPTION:${escapeICS(td.description)}`);
-    if (td.end) lines.push(`DUE:${toICSDate(td.end)}`);
+    if (td.deadline || td.end) lines.push(`DUE:${toICSDate(td.deadline || td.end!)}`);
     lines.push(`STATUS:${td.checked ? 'COMPLETED' : 'NEEDS-ACTION'}`);
     lines.push('END:VTODO');
   }
@@ -44,7 +44,7 @@ export function downloadICS(ics: string, filenameBase: string) {
 }
 
 export function buildCSV(rows: Task[]): string {
-  const header = 'id,title,stage,start,end,checked,parentId,calendarId,category';
+  const header = 'id,title,stage,start,end,checked,parentId,calendarId,category,deadline,estimatedMinutes,priority';
   const escape = (val: string | number | boolean | null | undefined): string => {
     if (val == null) return '';
     const s = String(val);
@@ -53,7 +53,7 @@ export function buildCSV(rows: Task[]): string {
     }
     return s;
   };
-  const lines = rows.map((t) => [t.id, t.title, t.stage, t.start ?? '', t.end ?? '', t.checked, t.parentId ?? '', t.calendarId, t.category ?? 'other'].map(escape).join(','));
+  const lines = rows.map((t) => [t.id, t.title, t.stage, t.start ?? '', t.end ?? '', t.checked, t.parentId ?? '', t.calendarId, t.category ?? 'other', t.deadline ?? '', t.estimatedMinutes ?? '', t.priority ?? 'medium'].map(escape).join(','));
   return [header, ...lines].join('\n');
 }
 
