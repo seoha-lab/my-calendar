@@ -1,6 +1,6 @@
 import { t } from '@/lib/i18n';
 import Link from 'next/link';
-import { CalendarDays, Settings, Plus, Search, Sun, Moon, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { CalendarCheck2, CalendarDays, Settings, Plus, Search, Sun, Moon, Eye, EyeOff, Sparkles } from 'lucide-react';
 import React from 'react';
 import { useStore } from '@/store';
 import { applyTheme } from '@/lib/theme';
@@ -39,9 +39,10 @@ export default function Header({ onQuickAdd }: Props) {
       <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <CalendarDays className="w-6 h-6 text-blue-600" />
-          <Link href="/" className="text-lg font-semibold">Clarity</Link>
+          <Link href="/" className="text-lg font-semibold"><span className="hidden sm:inline">Clarity</span><span className="sr-only sm:hidden">캘린더</span></Link>
         </div>
         <div className="flex items-center gap-2">
+          <Link href={{ pathname: '/today' }} className="btn btn-ghost min-h-10 px-2.5" aria-label="Today" title="Today"><CalendarCheck2 className="h-4 w-4" /><span className="hidden lg:inline">Today</span></Link>
           <div
             className={`hidden md:flex items-center gap-2 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 px-3 h-10 transition-all duration-300 ease-out ${focused ? 'w-[70vw] lg:w-[560px] xl:w-[720px]' : 'w-[260px] lg:w-[320px]'}`}
           >
