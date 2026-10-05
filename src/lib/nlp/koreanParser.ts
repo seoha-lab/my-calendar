@@ -26,11 +26,12 @@ export function parseKoreanInput(input: string, referenceDate = new Date()): Par
   const title = removeSpans(trimmed, [date.span, time.span, location.span]);
   const ambiguities = [...date.ambiguities, ...time.ambiguities];
   if (!date.date) ambiguities.push('날짜를 선택해 주세요.');
-  if (!time.startTime) ambiguities.push('시작 시간을 선택해 주세요.');
+  if (!time.startTime && !time.timePeriod) ambiguities.push('시작 시간을 선택해 주세요.');
   if (!title) ambiguities.push('일정 제목을 입력해 주세요.');
   return {
     kind: 'event',
     title,
+    timePeriod: time.timePeriod,
     date: date.date,
     startTime: time.startTime,
     endTime: time.endTime ?? (time.startTime ? addHour(time.startTime) : undefined),
@@ -41,4 +42,3 @@ export function parseKoreanInput(input: string, referenceDate = new Date()): Par
     ambiguities: [...new Set(ambiguities)],
   };
 }
-

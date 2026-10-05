@@ -13,6 +13,7 @@ const withSW = withSerwist({
   register: true,
   additionalPrecacheEntries: [
     { url: "/", revision: shellRevision },
+    { url: "/today", revision: shellRevision },
     { url: "/settings", revision: shellRevision },
   ],
   scope: "/",

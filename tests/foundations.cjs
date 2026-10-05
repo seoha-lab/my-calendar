@@ -187,21 +187,64 @@ async function main() {
   assert.equal(parseKoreanDate('2026년 10월 5일 월요일',reference).date,'2026-10-05');
   assert.deepEqual(parseKoreanTime('오전 9시 30분'),{startTime:'09:30',span:{start:0,end:9,text:'오전 9시 30분'},ambiguities:[]});
   assert.equal(parseKoreanTime('오후 3시').startTime,'15:00');
+  assert.equal(parseKoreanTime('아침 7시').startTime,'07:00');
+  assert.equal(parseKoreanTime('아침 6시').startTime,'06:00');
+  assert.equal(parseKoreanTime('아침 10시').startTime,'10:00');
+  assert.equal(parseKoreanTime('아침 8시 30분').startTime,'08:30');
+  assert.equal(parseKoreanTime('점심 12시').startTime,'12:00');
+  assert.equal(parseKoreanTime('점심 1시').startTime,'13:00');
+  assert.equal(parseKoreanTime('점심 1시 30분').startTime,'13:30');
+  assert.equal(parseKoreanTime('점심 2시 30분').startTime,'14:30');
+  assert.equal(parseKoreanTime('저녁 6시').startTime,'18:00');
   assert.equal(parseKoreanTime('저녁 7시').startTime,'19:00');
+  assert.equal(parseKoreanTime('저녁 7시 30분').startTime,'19:30');
+  assert.equal(parseKoreanTime('밤 9시').startTime,'21:00');
   assert.equal(parseKoreanTime('밤 10시').startTime,'22:00');
+  assert.equal(parseKoreanTime('밤 11시 30분').startTime,'23:30');
   assert.equal(parseKoreanTime('15시 30분').startTime,'15:30');
   assert.equal(parseKoreanTime('정오').startTime,'12:00');
   assert.equal(parseKoreanTime('자정').startTime,'00:00');
   assert.deepEqual([parseKoreanTime('오후 3시부터 4시까지').startTime,parseKoreanTime('오후 3시부터 4시까지').endTime],['15:00','16:00']);
+  assert.deepEqual([parseKoreanTime('오후 3시~4시').startTime,parseKoreanTime('오후 3시~4시').endTime],['15:00','16:00']);
   assert.deepEqual([parseKoreanTime('15:00-16:00').startTime,parseKoreanTime('15:00-16:00').endTime],['15:00','16:00']);
+  for (const [input,period,title] of [['내일 아침에 수영','morning','수영'],['내일 점심에 약속','lunch','약속'],['내일 저녁에 회의','evening','회의'],['오늘 밤에 공부','night','공부']]) {
+    const parsed=parseKoreanInput(input,reference);
+    assert.equal(parsed.timePeriod,period); assert.equal(parsed.startTime,undefined); assert.equal(parsed.title,title); assert.ok(parsed.ambiguities.some(item=>item.includes('정확한 시간을 입력')));
+  }
+  const lifestyleCases=[
+    ['내일 아침 8시 수영','2026-10-03','08:00','수영'],
+    ['내일 아침 8시 30분 수영','2026-10-03','08:30','수영'],
+    ['금요일 점심 12시 교수님 만나기','2026-10-02','12:00','교수님 만나기'],
+    ['금요일 점심 1시 식사','2026-10-02','13:00','식사'],
+    ['토요일 저녁 6시 약속','2026-10-03','18:00','약속'],
+    ['토요일 저녁 7시 30분 약속','2026-10-03','19:30','약속'],
+    ['오늘 밤 10시 공부','2026-10-02','22:00','공부'],
+  ];
+  for (const [input,date,startTime,title] of lifestyleCases) {
+    const parsed=parseKoreanInput(input,reference);
+    assert.deepEqual({date:parsed.date,startTime:parsed.startTime,title:parsed.title},{date,startTime,title});
+  }
+  const schoolMorning=parseKoreanInput('내일 아침 8시 학교에서 회의',reference);
+  assert.deepEqual({title:schoolMorning.title,location:schoolMorning.location},{title:'회의',location:'학교'});
+  const hospitalLunch=parseKoreanInput('점심 1시 병원에서 교육',reference);
+  assert.deepEqual({title:hospitalLunch.title,location:hospitalLunch.location,category:hospitalLunch.category},{title:'교육',location:'병원',category:'hospital'});
+  const gangnamEvening=parseKoreanInput('저녁 7시 강남에서 약속',reference);
+  assert.deepEqual({title:gangnamEvening.title,location:gangnamEvening.location,category:gangnamEvening.category},{title:'약속',location:'강남',category:'personal'});
+  assert.equal(parseKoreanInput('아침 8시 수영',reference).category,'exercise');
+  assert.equal(parseKoreanInput('점심 1시 대학원 수업',reference).category,'graduate');
+  assert.equal(parseKoreanInput('저녁 7시 친구 약속',reference).category,'personal');
+  assert.equal(parseKoreanInput('아침 7시 병원 교육',reference).category,'hospital');
   const meeting = parseKoreanInput('내일 오후 3시 학교에서 교수회의',reference);
   assert.deepEqual({kind:meeting.kind,title:meeting.title,date:meeting.date,startTime:meeting.startTime,location:meeting.location,category:meeting.category},{kind:'event',title:'교수회의',date:'2026-10-03',startTime:'15:00',location:'학교',category:'lecture'});
   assert.equal(parseKoreanInput('금요일 오전 9시 수영',reference).category,'exercise');
   assert.deepEqual(Object.fromEntries(Object.entries(parseKoreanInput('다음주 화요일 오후 2시 대학원 수업',reference)).filter(([key])=>['date','startTime','category','title'].includes(key))),{title:'대학원 수업',date:'2026-10-06',startTime:'14:00',category:'graduate'});
   assert.equal(parseKoreanInput('10월 5일 병원 교육',reference).category,'hospital');
   assert.deepEqual({kind:parseKoreanInput('내일 나이트',reference).kind,date:parseKoreanInput('내일 나이트',reference).date,shiftCode:parseKoreanInput('내일 나이트',reference).shiftCode},{kind:'shift',date:'2026-10-03',shiftCode:'N7'});
+  assert.equal(parseKoreanInput('오늘 데이',reference).shiftCode,'D7');
   assert.equal(parseKoreanInput('금요일 오프',reference).shiftCode,'OFF');
   assert.equal(parseKoreanInput('10월 8일 D7',reference).shiftCode,'D7');
+  assert.equal(parseKoreanInput('10월 9일 N7',reference).shiftCode,'N7');
+  assert.equal(parseKoreanInput('10월 10일 OFF',reference).shiftCode,'OFF');
   const quickAddD7 = parseKoreanInput('오늘 오전 9시 수영',new Date(2026,9,1,8));
   const quickStart = new Date(localDateTimeToISO(quickAddD7.date,quickAddD7.startTime));
   const quickEnd = new Date(localDateTimeToISO(quickAddD7.date,quickAddD7.endTime));
@@ -226,6 +269,8 @@ async function main() {
   assert.match(buildCSV([{...task,category:'research'}]), /calendarId,category/);
   assert.match(buildCSV([{...task,category:'research'}]), /local,research/);
   assert.match(buildICS({events:[{...task,category:'research'}],todos:[]}), /CATEGORIES:research/);
+  const nextConfigSource=fs.readFileSync(path.join(root,'next.config.mjs'),'utf8');
+  assert.match(nextConfigSource,/\{ url: "\/today", revision: shellRevision \}/);
   // Execute the actual worker migration SQL in SQLite WASM, including old records/ranges.
   const sqlite3 = await (await import('@sqlite.org/sqlite-wasm')).default();
   const sqlDB = new sqlite3.oo1.DB(':memory:');
