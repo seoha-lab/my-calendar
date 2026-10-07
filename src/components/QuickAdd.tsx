@@ -101,7 +101,6 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
           title,
           category,
           deadline: planning.deadline,
-          estimatedMinutes: planning.estimatedMinutes,
           priority: planning.priority ?? 'medium',
           stage: 'todo',
           checked: false,
