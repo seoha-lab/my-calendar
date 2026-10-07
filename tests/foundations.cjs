@@ -1,4 +1,5 @@
 // Uses the existing TypeScript dependency; no additional test runner needed.
+process.env.TZ = 'Asia/Seoul';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -316,8 +317,8 @@ async function main() {
   // Execute the actual worker migration SQL in SQLite WASM, including old records/ranges.
   const sqlite3 = await (await import('@sqlite.org/sqlite-wasm')).default();
   const sqlDB = new sqlite3.oo1.DB(':memory:');
-  const workerSource = fs.readFileSync(path.join(root,'workers/db.worker.ts'),'utf8');
-  const schema = workerSource.match(/function migrateSQL\(\): string \{\s*return `([\s\S]*?)`;/)[1];
+  const workerSourceSchema = fs.readFileSync(path.join(root,'workers/db.worker.ts'),'utf8');
+  const schema = workerSourceSchema.match(/function migrateSQL\(\): string \{\s*return `([\s\S]*?)`;/)[1];
   sqlDB.exec(schema);
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_types',returnValue:'resultRows',rowMode:'object'})[0].n,7);
   const schedulingColumns=sqlDB.exec({sql:'PRAGMA table_info(tasks)',returnValue:'resultRows',rowMode:'object'}).map(column=>column.name);
@@ -325,7 +326,7 @@ async function main() {
   sqlDB.exec({sql:'INSERT INTO tasks(id,title,stage,checked,createdAt,updatedAt,calendarId) VALUES (?,?,?,?,?,?,?)',bind:['legacy','기존 일정','todo',0,'2026-09-27','2026-09-27','local']});
   sqlDB.exec({sql:'UPDATE tasks SET location = ? WHERE id = ?',bind:['학교','legacy']});
   sqlDB.exec({sql:'INSERT INTO task_ranges(id,taskId,start,end,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',bind:['range','legacy',task.start,task.end,'2026-09-27','2026-09-27']});
-  const migration = workerSource.match(/dbi\.exec\("(ALTER TABLE tasks ADD COLUMN category[^\"]+)"\)/)[1];
+  const migration = workerSourceSchema.match(/dbi\.exec\("(ALTER TABLE tasks ADD COLUMN category[^\"]+)"\)/)[1];
   for(let i=0;i<2;i++) {
     const columns=sqlDB.exec({sql:'PRAGMA table_info(tasks)',returnValue:'resultRows',rowMode:'object'});
     if(!columns.some(c=>c.name==='category'))sqlDB.exec(migration);
