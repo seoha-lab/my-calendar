@@ -1,4 +1,5 @@
 import type { EventCategory } from '@/lib/calendar/categories';
+import type { WeeklyRecurrence } from './recurrence';
 
 export type ParsedEvent = {
   kind: 'event';
@@ -11,6 +12,7 @@ export type ParsedEvent = {
   category: EventCategory;
   allDay: boolean;
   note?: string;
+  recurrence?: WeeklyRecurrence;
   confidence: number;
   ambiguities: string[];
 };
