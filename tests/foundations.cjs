@@ -47,6 +47,34 @@ async function main() {
   const d7 = {id:'shift-d7',code:'D7',name:'데이',startTime:'06:30',endTime:'18:30',crossesMidnight:false,isOff:false,enabled:true,sortOrder:10};
   const n7 = {id:'shift-n7',code:'N7',name:'나이트',startTime:'18:30',endTime:'06:30',crossesMidnight:true,isOff:false,enabled:true,sortOrder:20};
   const off = {id:'shift-off',code:'OFF',name:'오프',startTime:null,endTime:null,crossesMidnight:false,isOff:true,enabled:true,sortOrder:30};
+  const d = {id:'shift-d',code:'D',name:'데이',startTime:'06:30',endTime:'14:30',crossesMidnight:false,isOff:false,enabled:true,sortOrder:1};
+  const e = {id:'shift-e',code:'E',name:'이브닝',startTime:'14:30',endTime:'22:30',crossesMidnight:false,isOff:false,enabled:true,sortOrder:2};
+  const n = {id:'shift-n',code:'N',name:'나이트',startTime:'22:30',endTime:'06:30',crossesMidnight:true,isOff:false,enabled:true,sortOrder:3};
+  const d2 = {id:'shift-d2',code:'D2',name:'데이2',startTime:'10:30',endTime:'18:30',crossesMidnight:false,isOff:false,enabled:true,sortOrder:4};
+  assert.deepEqual([getShiftInterval('2026-10-01',d).start.getHours(),getShiftInterval('2026-10-01',d).end.getHours(),getShiftInterval('2026-10-01',d).end.getMinutes()],[6,14,30]);
+  assert.deepEqual([getShiftInterval('2026-10-01',e).start.getHours(),getShiftInterval('2026-10-01',e).end.getHours()],[14,22]);
+  const nInterval = getShiftInterval('2026-10-01',n);
+  assert.deepEqual([nInterval.start.getDate(),nInterval.start.getHours(),nInterval.end.getDate(),nInterval.end.getHours()],[1,22,2,6]);
+  assert.deepEqual([getShiftInterval('2026-10-01',d2).start.getHours(),getShiftInterval('2026-10-01',d2).end.getHours()],[10,18]);
+  const { stageShiftChange, materializeShiftChanges, advanceShiftDate } = load('src/lib/shifts/monthly.ts');
+  let staged = {};
+  let step = stageShiftChange(staged,'2026-10-01',d.id); staged = step.changes; assert.equal(step.nextDate,'2026-10-02');
+  step = stageShiftChange(staged,step.nextDate,e.id); staged = step.changes;
+  step = stageShiftChange(staged,step.nextDate,n.id); staged = step.changes;
+  step = stageShiftChange(staged,step.nextDate,null); staged = step.changes;
+  step = stageShiftChange(staged,step.nextDate,d2.id); staged = step.changes;
+  assert.equal(step.nextDate,'2026-10-06');
+  assert.equal(advanceShiftDate('2026-10-31'),'2026-11-01');
+  const existingShifts = {'2026-10-04':{id:'old',date:'2026-10-04',shiftTypeId:d7.id,createdAt:'x',updatedAt:'x'}};
+  assert.deepEqual(materializeShiftChanges(staged,existingShifts),{
+    upserts:[
+      {date:'2026-10-01',shiftTypeId:d.id},
+      {date:'2026-10-02',shiftTypeId:e.id},
+      {date:'2026-10-03',shiftTypeId:n.id},
+      {date:'2026-10-05',shiftTypeId:d2.id},
+    ],
+    deleteDates:['2026-10-04'],
+  });
   const d7Interval = getShiftInterval('2026-10-01', d7);
   assert.deepEqual([d7Interval.start.getFullYear(),d7Interval.start.getMonth()+1,d7Interval.start.getDate(),d7Interval.start.getHours(),d7Interval.start.getMinutes()],[2026,10,1,6,30]);
   assert.deepEqual([d7Interval.end.getFullYear(),d7Interval.end.getMonth()+1,d7Interval.end.getDate(),d7Interval.end.getHours(),d7Interval.end.getMinutes()],[2026,10,1,18,30]);
@@ -271,13 +299,27 @@ async function main() {
   assert.match(buildICS({events:[{...task,category:'research'}],todos:[]}), /CATEGORIES:research/);
   const nextConfigSource=fs.readFileSync(path.join(root,'next.config.mjs'),'utf8');
   assert.match(nextConfigSource,/\{ url: "\/today", revision: shellRevision \}/);
+  const calendarSource=fs.readFileSync(path.join(root,'src/components/CalendarView.tsx'),'utf8');
+  assert.match(calendarSource,/initialView="dayGridMonth"/);
+  assert.match(calendarSource,/openShiftManager\(undefined, 'month'\)/);
+  const quickAddSource=fs.readFileSync(path.join(root,'src/components/QuickAdd.tsx'),'utf8');
+  assert.match(quickAddSource,/할 일 저장/);
+  const workerSource=fs.readFileSync(path.join(root,'workers/db.worker.ts'),'utf8');
+  for (const expected of [
+    "('shift-d','D','데이','06:30','14:30'",
+    "('shift-e','E','이브닝','14:30','22:30'",
+    "('shift-n','N','나이트','22:30','06:30'",
+    "('shift-d2','D2','데이2','10:30','18:30'",
+    "('shift-d7','D7'",
+    "('shift-n7','N7'",
+  ]) assert.ok(workerSource.includes(expected));
   // Execute the actual worker migration SQL in SQLite WASM, including old records/ranges.
   const sqlite3 = await (await import('@sqlite.org/sqlite-wasm')).default();
   const sqlDB = new sqlite3.oo1.DB(':memory:');
   const workerSource = fs.readFileSync(path.join(root,'workers/db.worker.ts'),'utf8');
   const schema = workerSource.match(/function migrateSQL\(\): string \{\s*return `([\s\S]*?)`;/)[1];
   sqlDB.exec(schema);
-  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_types',returnValue:'resultRows',rowMode:'object'})[0].n,3);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_types',returnValue:'resultRows',rowMode:'object'})[0].n,7);
   const schedulingColumns=sqlDB.exec({sql:'PRAGMA table_info(tasks)',returnValue:'resultRows',rowMode:'object'}).map(column=>column.name);
   assert.ok(['deadline','estimatedMinutes','priority'].every(column=>schedulingColumns.includes(column)));
   sqlDB.exec({sql:'INSERT INTO tasks(id,title,stage,checked,createdAt,updatedAt,calendarId) VALUES (?,?,?,?,?,?,?)',bind:['legacy','기존 일정','todo',0,'2026-09-27','2026-09-27','local']});
