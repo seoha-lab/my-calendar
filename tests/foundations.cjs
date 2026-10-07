@@ -204,7 +204,7 @@ async function main() {
   const completedOnly=buildTodayDashboard({tasks:[baseTask('done-today',{checked:true,stage:'done',completedAt:new Date(2026,9,4,8).toISOString()})],assignments:[],shiftTypes:[],preferences:todayPrefs,now:new Date(2026,9,4,9)});
   assert.equal(completedOnly.focusTasks.length,0); assert.equal(completedOnly.completedTodayCount,1); assert.equal(completedOnly.nextSchedule,undefined);
   const reference = new Date(2026,9,2,10,0);
-  const { parseKoreanInput, parseKoreanDate, parseKoreanTime, localDateTimeToISO } = load('src/lib/nlp/index.ts');
+  const { parseKoreanInput, parseKoreanDate, parseKoreanTime, parseWeeklyRecurrence, buildWeeklyOccurrenceDates, localDateTimeToISO } = load('src/lib/nlp/index.ts');
   assert.equal(parseKoreanDate('오늘',reference).date,'2026-10-02');
   assert.equal(parseKoreanDate('내일',reference).date,'2026-10-03');
   assert.equal(parseKoreanDate('모레',reference).date,'2026-10-04');
@@ -253,6 +253,18 @@ async function main() {
     const parsed=parseKoreanInput(input,reference);
     assert.deepEqual({date:parsed.date,startTime:parsed.startTime,title:parsed.title},{date,startTime,title});
   }
+  const recurringReference=new Date(2026,9,7,17,26);
+  const recurring=parseKoreanInput('매주 월수금 오전 9시 수영',recurringReference);
+  assert.equal(recurring.kind,'event');
+  assert.equal(recurring.title,'수영');
+  assert.equal(recurring.startTime,'09:00');
+  assert.equal(recurring.date,'2026-10-09');
+  assert.deepEqual(recurring.recurrence?.weekdays,[1,3,5]);
+  assert.deepEqual(parseWeeklyRecurrence('매주 월요일 수요일 금요일 오전 9시 수영').recurrence?.weekdays,[1,3,5]);
+  assert.deepEqual(buildWeeklyOccurrenceDates('2026-10-09','2026-10-16',[1,3,5]),['2026-10-09','2026-10-12','2026-10-14','2026-10-16']);
+  const recurringQuickAddSource=fs.readFileSync(path.join(root,'src/components/QuickAdd.tsx'),'utf8');
+  assert.ok(recurringQuickAddSource.includes('할 일 이름'));
+  assert.ok(recurringQuickAddSource.includes("isEvent: false"));
   const schoolMorning=parseKoreanInput('내일 아침 8시 학교에서 회의',reference);
   assert.deepEqual({title:schoolMorning.title,location:schoolMorning.location},{title:'회의',location:'학교'});
   const hospitalLunch=parseKoreanInput('점심 1시 병원에서 교육',reference);
