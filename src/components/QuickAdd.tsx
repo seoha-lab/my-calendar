@@ -236,6 +236,14 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
             </div>
             {showPlanning && <div className="mt-3"><TaskSchedulingFields value={planning} onChange={(patch) => setPlanning((current) => ({ ...current, ...patch }))} /></div>}
             {error && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{error}</p>}
+            <div className="sticky bottom-0 z-10 mt-4 border-t border-gray-100 bg-white pb-[max(4px,env(safe-area-inset-bottom))] pt-3 dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" className="btn min-h-11 px-4" onClick={() => { setText(''); onClose(); }}>취소</button>
+                <button type="submit" className="btn btn-primary min-h-11 px-5" disabled={!text.trim()}>
+                  {containsKorean(text) ? '내용 확인' : showPlanning ? '할 일 저장' : '저장'}
+                </button>
+              </div>
+            </div>
           </form>
         )}
 
