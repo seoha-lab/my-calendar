@@ -632,3 +632,58 @@ input[type="datetime-local"].input::-webkit-calendar-picker-indicator { opacity:
     border-left-width: 3px !important;
   }
 }
+
+
+/* Month task markers: tasks are distinct from timed schedule blocks. */
+.calendar-shell .fc-task-due {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+
+.calendar-shell .fc-month-task-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 5%, white);
+  padding: 2px 5px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.calendar-shell .fc-month-task-check {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.calendar-shell .fc-month-task-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-shell .fc-month-task-priority {
+  flex: 0 0 auto;
+  font-weight: 800;
+  color: #e11d48;
+}
+
+.calendar-shell .fc-timegrid .fc-task-due {
+  display: none !important;
+}
+
+@media (max-width: 639px) {
+  .calendar-shell .fc-month-task-row {
+    gap: 2px;
+    padding: 1px 3px;
+    font-size: 10px;
+  }
+}
