@@ -145,7 +145,7 @@ export default function CalendarView() {
     const typesById = new Map(shiftTypes.map((type) => [type.id, type]));
     for (const assignment of Object.values(shiftAssignments)) {
       const type = typesById.get(assignment.shiftTypeId);
-      if (!type || !type.enabled) continue;
+      if (!type || !type.enabled || type.isOff) continue;
       list.push(shiftAssignmentToCalendarEvent(assignment, type));
     }
     return list;
@@ -157,12 +157,12 @@ export default function CalendarView() {
         ref={calendarRef}
         locale={koLocale}
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView={typeof window !== 'undefined' && window.innerWidth < 640 ? 'timeGridDay' : 'timeGridFourDay'}
+        initialView="dayGridMonth"
         views={{
           timeGridFourDay: { type: 'timeGrid', duration: { days: 4 }, buttonText: '4일' },
         }}
         customButtons={{
-          shiftPlanner: { text: '근무', click: () => openShiftManager(undefined, 'single') },
+          shiftPlanner: { text: '근무 입력', click: () => openShiftManager(undefined, 'month') },
         }}
         buttonText={{
           today: '오늘',
@@ -176,6 +176,7 @@ export default function CalendarView() {
           try {
             const d = arg.date as Date;
             const wd = d.toLocaleDateString('ko-KR', { weekday: 'short' });
+            if (arg.view?.type === 'dayGridMonth') return { text: wd } as any;
             const n = d.getDate();
             const now = new Date();
             const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
@@ -184,10 +185,10 @@ export default function CalendarView() {
             return { text: arg.text } as any;
           }
         }}
-        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'shiftPlanner timeGridFourDay,timeGridWeek,timeGridDay,dayGridMonth' }}
+        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'shiftPlanner dayGridMonth,timeGridWeek,timeGridDay' }}
         height="100%"
         expandRows={true}
-        dayMaxEventRows={3}
+        dayMaxEventRows={4}
         nowIndicator={true}
         selectable={true}
         selectMirror={true}
@@ -216,6 +217,16 @@ export default function CalendarView() {
           const total = ep.subTotal ?? 0;
           const strike = (ep.checked || ep.stage === 'done') ? 'line-through' : '';
           const hasTime = !!arg.timeText;
+          const monthView = arg.view?.type === 'dayGridMonth';
+          if (monthView) {
+            return (
+              <div className="fc-month-event-row">
+                {hasTime && !arg.event.allDay && <span className="fc-month-event-time">{arg.timeText}</span>}
+                <span className={`fc-month-event-title ${strike}`}>{arg.event.title}</span>
+                {total > 0 && <span className="fc-month-event-count">{done}/{total}</span>}
+              </div>
+            );
+          }
           // Compact layout for short timed events (<= 30 minutes)
           const start = arg.event.start as Date | null;
           const end = arg.event.end as Date | null;
