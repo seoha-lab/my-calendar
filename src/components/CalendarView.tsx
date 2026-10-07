@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@/store';
 import { normalizeCategory } from '@/lib/calendar/categories';
 import { messages } from '@/lib/i18n';
-import { shiftAssignmentToCalendarEvent } from '@/lib/shifts';
+import { shiftAssignmentToCalendarEvent, toLocalDateKey } from '@/lib/shifts';
 import { openShiftManager } from '@/lib/shifts/ui';
 
 const FullCalendar = dynamic(() => import('@fullcalendar/react'), { ssr: false });
@@ -119,6 +119,35 @@ export default function CalendarView() {
       if (!enabledCals.has(t.calendarId) || t.hiddenOnCalendar) continue;
       if (hideDone && (t.checked || t.stage === 'done')) continue;
       if (!filterText(t)) continue;
+
+      // Plain tasks are always visible in the month calendar.
+      // Deadline tasks appear on their deadline date; tasks without a deadline
+      // stay anchored to the day they were created.
+      if (!t.isEvent) {
+        const anchor = t.deadline || t.createdAt;
+        const anchorDate = anchor ? toLocalDateKey(new Date(anchor)) : undefined;
+        if (anchorDate) {
+          list.push({
+            id: `${t.id}:task-due`,
+            title: t.title,
+            start: anchorDate,
+            allDay: true,
+            editable: false,
+            startEditable: false,
+            durationEditable: false,
+            extendedProps: {
+              kind: 'taskDue',
+              category: normalizeCategory(t.category),
+              taskId: t.id,
+              stage: t.stage,
+              checked: t.checked,
+              priority: t.priority,
+              hasDeadline: !!t.deadline,
+            },
+          });
+        }
+      }
+
       const hasMultiRanges = Array.isArray(t.ranges) && t.ranges.length > 1;
       const ranges = (t.ranges && t.ranges.length > 0) ? t.ranges : (t.start && t.end ? [{ id: 'primary', taskId: t.id, start: t.start, end: t.end, allDay: t.allDay }] as any[] : []);
       for (const r of ranges) {
@@ -198,6 +227,7 @@ export default function CalendarView() {
         eventClassNames={(arg: any) => {
           const ep: any = arg.event.extendedProps || {};
           if (ep.kind === 'shift') return 'fc-event-minimal fc-shift-event category-hospital';
+          if (ep.kind === 'taskDue') return `fc-event-minimal fc-task-due category-${normalizeCategory(ep.category)}`;
           const key = ep.taskId || String(arg.event.id);
           const base = creatingIds.current.has(key) ? 'fc-event-minimal fc-event-creating' : 'fc-event-minimal';
           return `${base} category-${normalizeCategory(ep.category)}${ep.hasMultiRanges ? ' fc-event-has-multi' : ''}`;
@@ -210,6 +240,15 @@ export default function CalendarView() {
               <div className="flex h-full w-full flex-col overflow-hidden">
                 <span className="font-semibold leading-tight">{ep.shiftCode}</span>
                 {!monthView && <span className="mt-1 text-xs leading-tight opacity-80">{ep.shiftTimeLabel}</span>}
+              </div>
+            );
+          }
+          if (ep.kind === 'taskDue') {
+            return (
+              <div className="fc-month-task-row">
+                <span className="fc-month-task-check" aria-hidden="true">{ep.checked ? '✓' : '□'}</span>
+                <span className={`fc-month-task-title ${ep.checked ? 'line-through opacity-60' : ''}`}>{arg.event.title}</span>
+                {ep.priority === 'high' && <span className="fc-month-task-priority">!</span>}
               </div>
             );
           }
@@ -385,6 +424,12 @@ export default function CalendarView() {
               const ep = info.event.extendedProps;
               el.title = `${ep.shiftCode} ${ep.shiftName} • ${ep.shiftTimeLabel}`;
               el.setAttribute('aria-label', `${ep.shiftDate} ${ep.shiftCode} ${ep.shiftName}, ${ep.shiftTimeLabel}`);
+              return;
+            }
+            if (info.event.extendedProps?.kind === 'taskDue') {
+              const ep = info.event.extendedProps;
+              el.title = ep.hasDeadline ? `할 일 마감 · ${info.event.title}` : `할 일 · ${info.event.title}`;
+              el.setAttribute('aria-label', `${info.event.title}, ${ep.hasDeadline ? '마감일' : '등록일'}`);
               return;
             }
             const s = info.event.start;
