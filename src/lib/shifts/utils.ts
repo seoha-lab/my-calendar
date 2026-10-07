@@ -78,9 +78,10 @@ export function shiftAssignmentToCalendarEvent(assignment: ShiftAssignment, shif
   return {
     id: `shift:${assignment.id}`,
     title: shiftType.code,
-    start: interval.start.toISOString(),
-    end: interval.end.toISOString(),
-    allDay: false,
+    // Visual calendar placement stays on the assigned date; busy-time logic still uses getShiftInterval().
+    start: assignment.date,
+    end: addLocalDays(assignment.date, 1),
+    allDay: true,
     editable: false,
     extendedProps: { kind: 'shift', category: 'hospital', assignmentId: assignment.id, shiftTypeId: shiftType.id, shiftDate: assignment.date, shiftCode: shiftType.code, shiftName: shiftType.name, shiftTimeLabel: timeLabel },
   };
