@@ -26,4 +26,15 @@ function extractWeekdayTokens(raw: string): number[] {
 export function parseWeeklyRecurrence(input: string): { recurrence?: WeeklyRecurrence; span?: TextSpan } {
   const long = new RegExp(`매주\\s*(${LONG_DAY}(?:\\s*(?:[,/·]\\s*|\\s+)${LONG_DAY})*)`).exec(input);
   const separated = /매주\s*((?:[월화수목금토일]\s*[,/·]\s*)+[월화수목금토일])/.exec(input);
-  const compact = /매춻q^
+  const compact = /매주\s*([월화수목금토일]{1,7})(?!요일)/.exec(input);
+  const match = long ?? separated ?? compact;
+  if (!match) return {};
+  const weekdays = extractWeekdayTokens(match[1]);
+  if (!weekdays.length) return {};
+  return { recurrence: { frequency: 'weekly', weekdays }, span: { start: match.index, end: match.index + match[0].length, text: match[0] } };
+}
+
+export function firstWeeklyOccurrenceDate(weekdays: number[], referenceDate: Date, startTime?: string): string | undefined {
+  const allowed = new Set(weekdays);
+  for (let offset = 0; offset < 14; offset += 1) {
+    const candidate = new Date(referenceDate.getFullYear(),...[truncated]
