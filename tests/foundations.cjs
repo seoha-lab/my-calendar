@@ -265,6 +265,11 @@ async function main() {
   const recurringQuickAddSource=fs.readFileSync(path.join(root,'src/components/QuickAdd.tsx'),'utf8');
   assert.ok(recurringQuickAddSource.includes('할 일 이름'));
   assert.ok(recurringQuickAddSource.includes("isEvent: false"));
+  const taskSchedulingSource=fs.readFileSync(path.join(root,'src/components/TaskSchedulingFields.tsx'),'utf8');
+  assert.ok(!taskSchedulingSource.includes('예상 소요시간'));
+  const calendarViewSource=fs.readFileSync(path.join(root,'src/components/CalendarView.tsx'),'utf8');
+  assert.ok(calendarViewSource.includes("kind: 'taskDue'"));
+  assert.ok(calendarViewSource.includes("const anchor = t.deadline || t.createdAt"));
   const schoolMorning=parseKoreanInput('내일 아침 8시 학교에서 회의',reference);
   assert.deepEqual({title:schoolMorning.title,location:schoolMorning.location},{title:'회의',location:'학교'});
   const hospitalLunch=parseKoreanInput('점심 1시 병원에서 교육',reference);
