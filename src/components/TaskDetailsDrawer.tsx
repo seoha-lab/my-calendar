@@ -8,14 +8,13 @@ import { toast } from '@/lib/toast';
 import { Task, SubTask, Stage } from '@/types';
 import { format } from '@/lib/i18n/date';
 import { isSameDay, isSameYear, isToday, isTomorrow, isYesterday, isWithinInterval, differenceInMinutes } from 'date-fns';
-import { Trash2, Copy, X, Plus, Zap, Loader2, CalendarClock } from 'lucide-react';
+import { Trash2, Copy, X, Plus, Zap, Loader2 } from 'lucide-react';
 import CategorySelect from './CategorySelect';
 import DateTimePicker from '@/components/DateTimePicker';
 import { SUBTASKS_SYSTEM_PROMPT } from '@/lib/prompts';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
 import { findConflicts, getCombinedBusyIntervals } from '@/lib/scheduling';
 import TaskSchedulingFields from '@/components/TaskSchedulingFields';
-import { openAutoSchedule } from '@/lib/scheduling/ui';
 
 type Props = { open: boolean; taskId?: string | null; highlightRangeId?: string; onClose: () => void };
 
@@ -111,7 +110,6 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
       description: copy.description,
       location: copy.location,
       deadline: copy.deadline,
-      estimatedMinutes: copy.estimatedMinutes,
       priority: copy.priority,
       stage: copy.stage,
       checked: false,
@@ -254,7 +252,6 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
           <CategorySelect value={local.category} onChange={(category) => setLocal({ ...local, category })} />
           <DescriptionEditor value={local.description ?? ''} onChange={(v) => setLocal({ ...local, description: v })} />
           <TaskSchedulingFields value={local} onChange={(patch) => setLocal({ ...local, ...patch })} />
-          <button type="button" className="btn btn-primary flex min-h-11 w-full items-center justify-center gap-2" disabled={!local.deadline || !local.estimatedMinutes || local.checked} onClick={async () => { await updateTask(task.id, sanitize(local)); openAutoSchedule(task.id); }}><CalendarClock className="h-4 w-4" />빈 시간에 배치</button>
           <RangesTimeline taskId={task.id} highlightRangeId={highlightRangeId} />
           <SubtasksEditor task={local} setTask={setLocal} />
           {linked.length > 0 && (
