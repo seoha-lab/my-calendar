@@ -176,13 +176,13 @@ export default function CalendarView() {
           try {
             const d = arg.date as Date;
             const wd = d.toLocaleDateString('ko-KR', { weekday: 'short' });
-            if (arg.view?.type === 'dayGridMonth') return { text: wd } as any;
+            if (arg.view?.type === 'dayGridMonth') return wd;
             const n = d.getDate();
             const now = new Date();
             const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
             return { html: `<span class="fc-dow">${wd}</span><span class="fc-date-badge ${isToday ? 'is-today' : ''}">${n}</span>` } as any;
           } catch {
-            return { text: arg.text } as any;
+            return arg.text;
           }
         }}
         headerToolbar={{ left: 'prev,next today', center: 'title', right: 'shiftPlanner dayGridMonth,timeGridWeek,timeGridDay' }}
