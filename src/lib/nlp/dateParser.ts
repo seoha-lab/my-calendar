@@ -26,24 +26,9 @@ export function parseKoreanDate(input: string, referenceDate: Date): { date?: st
     return { date: dateKey(parsed), span: { start: explicit.index, end, text: input.slice(explicit.index, end) }, ambiguities };
   }
 
-  const relative = /(오늘|내일|모레)/.exec(input);
-  if (relative) {
-    const amount = relative[1] === '오늘' ? 0 : relative[1] === '내일' ? 1 : 2;
-    return { date: dateKey(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate() + amount, 12)), span: { start: relative.index, end: relative.index + relative[0].length, text: relative[0] }, ambiguities: [] };
-  }
-
-  const weekday = /(?:(이번주|다음주)\s*)?(월요일|화요일|수요일|목요일|금요일|토요일|일요일)/.exec(input);
-  if (weekday) {
-    const target = WEEKDAYS[weekday[2]];
-    let delta: number;
-    if (weekday[1]) {
-      const mondayOffset = (referenceDate.getDay() + 6) % 7;
-      delta = -mondayOffset + (target + 6) % 7 + (weekday[1] === '다음주' ? 7 : 0);
-    } else {
-      delta = (target - referenceDate.getDay() + 7) % 7;
-    }
-    return { date: dateKey(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate() + delta, 12)), span: { start: weekday.index, end: weekday.index + weekday[0].length, text: weekday[0] }, ambiguities: [] };
-  }
-  return { ambiguities: [] };
-}
-
+  const dayOnly = /(^|\s)(\d{1,2})일(?=$|\s)/.exec(input);
+  if (dayOnly) {
+    const day = Number(dayOnly[2]);
+    const parsed = validLocalDate(referenceDate.getFullYear(), referenceDate.getMonth() + 1, day);
+    if (!parsed) return { ambiguities: ['날짜가 올바르지 않습니다.'] };
+    ...[truncated]
