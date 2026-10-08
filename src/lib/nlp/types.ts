@@ -20,7 +20,7 @@ export type ParsedEvent = {
 export type ParsedShift = {
   kind: 'shift';
   date?: string;
-  shiftCode: 'D7' | 'N7' | 'OFF';
+  shiftCode: string;
   category: 'hospital';
   confidence: number;
   ambiguities: string[];
