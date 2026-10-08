@@ -28,4 +28,4 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
   const createTask = useStore((s) => s.createTask);
 
   const [local, setLocal] = useState<Task | undefined>(task);
-  const [saving, setSav¶»§q«^
+  const [saving, setSavï¿½ï¿½ï¿½qï¿½^

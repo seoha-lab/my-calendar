@@ -40,4 +40,4 @@ export default function QuickAddPreview({ value, onChange, onBack, onSaved }: Pr
   const tasks = useStore((s) => s.tasks);
   const shiftAssignments = useStore((s) => s.shiftAssignments);
 
-  const [confirmedAmbi¶»§q«^
+  const [confirmedAmbiï¿½ï¿½ï¿½qï¿½^

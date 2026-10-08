@@ -30,4 +30,4 @@ export default function CalendarView() {
   const hideDone = useStore((s) => s.hideDone);
   const shiftTypes = useStore((s) => s.shiftTypes);
   const shiftAssignments = useStore((s) => s.shiftAssignments);
-  const calendarRef = useRef<a¶»§q«^
+  const calendarRef = useRef<aï¿½ï¿½ï¿½qï¿½^

@@ -42,4 +42,4 @@ export default function TaskCard({ task, onToggle, onOpen, showFullDate = false 
     <div
       ref={ref}
       tabIndex={0}
-      className={`rounded-2xl border p-3 focus:ring-2 focus:ring-blue-500 outline-none fc-draggable-task cursor-gra¶»§q«^
+      className={`rounded-2xl border p-3 focus:ring-2 focus:ring-blue-500 outline-none fc-draggable-task cursor-graï¿½ï¿½ï¿½qï¿½^

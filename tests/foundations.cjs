@@ -24,4 +24,4 @@ function load(file, mocks = {}) {
 }
 async function main() {
   const { EVENT_CATEGORIES, normalizeCategory } = load('src/lib/calendar/categories.ts');
-  const { CALENDAR_THEMES, getCalendarTheme } = load('s¶»§q«^
+  const { CALENDAR_THEMES, getCalendarTheme } = load('sï¿½ï¿½ï¿½qï¿½^
