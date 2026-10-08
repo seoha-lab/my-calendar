@@ -5,7 +5,7 @@ import QuickAddProvider from './quick-add/QuickAddProvider';
 import React from 'react';
 
 export const metadata: Metadata = {
-  title: 'Clarity',
+  title: 'Daymo',
   description: '오프라인으로 사용하는 개인 일정과 할 일',
   manifest: '/manifest.webmanifest',
   themeColor: [
@@ -22,9 +22,9 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Clarity',
+    title: 'Daymo',
   },
-  applicationName: 'Clarity',
+  applicationName: 'Daymo',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
