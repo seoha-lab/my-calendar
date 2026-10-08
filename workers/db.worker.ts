@@ -113,8 +113,12 @@ CREATE INDEX IF NOT EXISTS idx_shift_assignments_type ON shift_assignments(shift
 
 INSERT OR IGNORE INTO shift_types(id,code,name,startTime,endTime,crossesMidnight,isOff,enabled,sortOrder)
 VALUES
-  ('shift-d7','D7','데이','06:30','18:30',0,0,1,10),
-  ('shift-n7','N7','나이트','18:30','06:30',1,0,1,20),
+  ('shift-d','D','데이','06:30','14:30',0,0,1,1),
+  ('shift-e','E','이브닝','14:30','22:30',0,0,1,2),
+  ('shift-n','N','나이트','22:30','06:30',1,0,1,3),
+  ('shift-d2','D2','데이2','10:30','18:30',0,0,1,4),
+  ('shift-d7','D7','데이(12시간)','06:30','18:30',0,0,1,10),
+  ('shift-n7','N7','나이트(12시간)','18:30','06:30',1,0,1,20),
   ('shift-off','OFF','오프',NULL,NULL,0,1,1,30);
 `;
 }
