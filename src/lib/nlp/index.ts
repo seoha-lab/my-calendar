@@ -5,6 +5,8 @@ export type { KoreanTimePeriod } from './timeParser';
 export { parseLocation } from './locationParser';
 export { inferCategory } from './categoryParser';
 export { parseShiftInput } from './shiftParser';
+export { parseWeeklyRecurrence, firstWeeklyOccurrenceDate, buildWeeklyOccurrenceDates, weeklyRecurrenceLabel } from './recurrence';
+export type { WeeklyRecurrence } from './recurrence';
 export { localDateTimeToISO, isEndOnNextDay } from './datetime';
 export type { ParsedEvent, ParsedShift, ParsedKoreanInput } from './types';
 
