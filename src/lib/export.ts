@@ -30,18 +30,4 @@ export function buildICS({ events, todos }: { events: Task[]; todos: Task[] }): 
     lines.push(`SUMMARY:${escapeICS(td.title)}`);
     if (td.category) lines.push(`CATEGORIES:${escapeICS(td.category)}`);
     if (td.description) lines.push(`DESCRIPTION:${escapeICS(td.description)}`);
-    if (td.deadline || td.end) lines.push(`DUE:${toICSDate(td.deadline || td.end!)}`);
-    lines.push(`STATUS:${td.checked ? 'COMPLETED' : 'NEEDS-ACTION'}`);
-    lines.push('END:VTODO');
-  }
-  lines.push('END:VCALENDAR');
-  return lines.join('\n');
-}
-
-export function downloadICS(ics: string, filenameBase: string) {
-  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-  saveAs(blob, `${filenameBase}.ics`);
-}
-
-export function buildCSV(rows: Task[]): string {
-  const header = 'id,title,stage,start,end,checked,parentId,calendarId,category,deadline,esti...[truncated]
+    if (td.deadline || td.end) lines.push(`DUE:${toICSDate(td.deadline || ¶»§q«^

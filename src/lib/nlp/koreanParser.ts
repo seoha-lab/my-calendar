@@ -24,11 +24,4 @@ export function parseKoreanInput(input: string, referenceDate = new Date()): Par
   const recurrence = parseWeeklyRecurrence(trimmed);
   const allDayMatch = /(하루\s*종일|하루종일|종일)/.exec(trimmed);
   const allDaySpan = allDayMatch ? { start: allDayMatch.index, end: allDayMatch.index + allDayMatch[0].length, text: allDayMatch[0] } : undefined;
-  const time = allDayMatch ? { startTime: undefined, endTime: undefined, timePeriod: undefined, span: allDaySpan, ambiguities: [] as string[] } : parseKoreanTime(trimmed);
-  const parsedDate = parseKoreanDate(trimmed, referenceDate);
-  const date = recurrence.recurrence
-    ? { date: firstWeeklyOccurrenceDate(recurrence.recurrence.weekdays, referenceDate, time.startTime), span: undefined, ambiguities: [] as string[] }
-    : parsedDate;
-  const location = parseLocation(trimmed);
-  const title = removeSpans(trimmed, [recurrence.span, date.span, time.span, location.span, allDaySpan]);
-  const ambiguities = [...date.ambi...[truncated]
+  const time = allDayMatch ? { startTime: undefined, endTime: undefined, timePeriod: undefined, ���q�^

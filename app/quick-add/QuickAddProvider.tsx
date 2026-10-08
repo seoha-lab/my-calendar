@@ -34,22 +34,4 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
     };
     window.addEventListener('keydown', onKey);
     registerQuickAddOpen((prefill, options) => {
-      setInitialText(prefill ?? '');
-      setInitialMode(options?.mode || 'quick');
-      setInitialOptions(options || { sheet: 'event' });
-      setOpen(true);
-    });
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      registerQuickAddOpen(() => {});
-    };
-  }, []);
-
-  useEffect(() => {
-    setupSWClient(() => toast(t("An update is available. Reload to apply.")));
-  }, []);
-
-  return (
-    <>
-      <CalendarThemeStyles />
-      <Header onQuickAdd={() => { setInitialText(''); setInit...[truncated]
+      setInitial¶»§q«^

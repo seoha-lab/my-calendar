@@ -29,14 +29,4 @@ export default function Header({ onQuickAdd }: Props) {
     } catch {}
     window.addEventListener('clarity-theme-changed', onTheme as EventListener);
     return () => {
-      try { if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', onChange); } catch {}
-      window.removeEventListener('clarity-theme-changed', onTheme as EventListener);
-    };
-  }, []);
-
-  return (
-    <header className="w-full sticky top-0 z-30 bg-white border-b border-gray-100 dark:bg-slate-950 dark:border-slate-800">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <CalendarDays className="w-6 h-6 text-blue-600" />
-          <Link href="/" className="text-lg font-semib...[truncated]
+      try { if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', onChange); } cat¶»§q«^

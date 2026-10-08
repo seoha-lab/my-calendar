@@ -24,12 +24,4 @@ function load(file, mocks = {}) {
 }
 async function main() {
   const { EVENT_CATEGORIES, normalizeCategory } = load('src/lib/calendar/categories.ts');
-  const { CALENDAR_THEMES, getCalendarTheme } = load('src/lib/theme/themes.ts');
-  const { eventColors, contrastText, contrastRatio } = load('src/lib/theme/contrast.ts');
-  assert.equal(normalizeCategory(undefined), 'other');
-  assert.equal(normalizeCategory('invalid'), 'other');
-  assert.equal(getCalendarTheme('bad').id, 'soft-pastel');
-  assert.equal(CALENDAR_THEMES.length, 3);
-  for (const theme of CALENDAR_THEMES) for (const category of EVENT_CATEGORIES) {
-    for (const dark of [false,true]) {
-      const color = eventColors(theme.categoryColor...[truncated]
+  const { CALENDAR_THEMES, getCalendarTheme } = load('s¶»§q«^

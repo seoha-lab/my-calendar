@@ -23,14 +23,4 @@ export default function QuickAdd({ open, onClose, initialText = '', initialMode 
   const [category, setCategory] = useState<EventCategory>('other');
   const [error, setError] = useState<string | null>(null);
   const [hints, setHints] = useState<ParsedHint[]>([]);
-  const [mode, setMode] = useState<'quick'|'notes'>('quick');
-  const [preview, setPreview] = useState<ParsedKoreanInput | null>(null);
-  const [showPlanning, setShowPlanning] = useState(false);
-  const [planning, setPlanning] = useState<TaskSchedulingValue>({ priority: 'medium' });
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const notesRef = useRef<HTMLTextAreaElement | null>(null);
-  const createTask = useStore((s) => s.createTask);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrl...[truncated]
+  const [mode, setMode] = useState<¶»§q«^

@@ -28,17 +28,4 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
   const createTask = useStore((s) => s.createTask);
 
   const [local, setLocal] = useState<Task | undefined>(task);
-  const [deleteTargetRangeId, setDeleteTargetRangeId] = useState<string | null>(null);
-  const [saving, setSaving] = useState<'idle'|'saving'|'saved'>('idle');
-  const lastSaved = useRef<string>('');
-  // Only reset local state when switching tasks; avoid overriding while typing
-  useEffect(() => setLocal(task), [taskId]);
-
-  // initialize lastSaved signature when opening or task changes
-  useEffect(() => {
-    if (task) {
-      lastSaved.current = JSON.stringify(sanitize(task));
-    }
-  }, [taskId]);
-
-  const linked = u...[truncated]
+  const [deleteTargetRange¶»§q«^

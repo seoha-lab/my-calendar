@@ -30,16 +30,4 @@ export default function CalendarView() {
   const hideDone = useStore((s) => s.hideDone);
   const shiftTypes = useStore((s) => s.shiftTypes);
   const shiftAssignments = useStore((s) => s.shiftAssignments);
-  const calendarRef = useRef<any>(null);
-  const lastDateClickRef = useRef<{ date: string; at: number } | null>(null);
-  // Re-render events instantly on theme change so inline colors refresh
-  useEffect(() => {
-    const onTheme = () => {
-      try {
-        const api = calendarRef.current?.getApi?.();
-        if (!api) return;
-        if (typeof (api as any).batchRendering === 'function') {
-          (api as any).batchRendering(() => {
-            (api as any).rerenderEvents?.();
-            api.updateSize();
-          });...[truncated]
+  const calendarRef = useRef<a¶»§q«^

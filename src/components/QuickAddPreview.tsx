@@ -28,12 +28,4 @@ export default function QuickAddPreview({ value, onChange, onBack, onSaved }: Pr
   const [confirmedConflicts, setConfirmedConflicts] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const shiftType = useMemo(() => value.kind === 'shift' ? shiftTypes.find((type) => type.code === value.shiftCode) : undefined, [shiftTypes, value]);
-  const occurrenceDates = useMemo(() => {
-    if (value.kind !== 'event' || !value.date) return [];
-    if (!value.recurrence) return [value.date];
-    if (!value.recurrence.until) return [];
-    return buildWeeklyOccurrenceDates(value.date, value.recurrence.until, value.recurrence.weekdays);
-  }, [value]);
-  const conflicts = useMemo(() => {
-    let exclude: { source: BusyInterval['...[truncated]
+  const shiftType = useMemo(() => val¶»§q«^

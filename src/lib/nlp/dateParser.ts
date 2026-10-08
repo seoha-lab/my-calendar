@@ -20,15 +20,4 @@ export function parseKoreanDate(input: string, referenceDate: Date): { date?: st
     const parsed = validLocalDate(year, month, day);
     if (!parsed) return { ambiguities: ['날짜가 올바르지 않습니다.'] };
     const trailingWeekday = /^\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일)/.exec(input.slice(explicit.index + explicit[0].length));
-    const end = explicit.index + explicit[0].length + (trailingWeekday?.[0].length ?? 0);
-    const ambiguities: string[] = [];
-    if (trailingWeekday && parsed.getDay() !== WEEKDAYS[trailingWeekday[1]]) ambiguities.push('입력한 날짜와 요일이 일치하지 않습니다.');
-    return { date: dateKey(parsed), span: { start: explicit.index, end, text: input.slice(explicit.index, end) }, ambiguities };
-  }
-
-  const dayOnly = /(^|\s)(\d{1,2})일(?=$|\s)/.exec(input);
-  if (dayOnly) {
-    const day = Number(dayOnly[2]);
-    const parsed = validLocalDate(referenceDate.getFullYear(), referenceDate.getMonth() + 1, day);
-    if (!parsed) return { ambiguities: ['날짜가 올바르지 않습니다.'] };
-    ...[truncated]
+    const end = explicit.index + explici���q�^
