@@ -1,12 +1,11 @@
 'use client';
 
-import { AlertTriangle, ArrowRight, BriefcaseMedical, CalendarClock, CalendarDays, CheckCircle2, Clock3, ListTodo, Plus, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BriefcaseMedical, CalendarDays, CheckCircle2, Clock3, ListTodo, Plus, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import CategoryBadge from '@/components/CategoryBadge';
 import TaskDetailsDrawer from '@/components/TaskDetailsDrawer';
 import { DEFAULT_FREE_TIME_PREFERENCES, FREE_TIME_PREFERENCES_EVENT, getFreeTimePreferences, type FreeTimePreferences } from '@/lib/preferences/freeTime';
 import { openQuickAdd } from '@/lib/quickAdd';
-import { openAutoSchedule } from '@/lib/scheduling/ui';
 import { openShiftManager } from '@/lib/shifts/ui';
 import { buildTodayDashboard, type TodayScheduleItem, type TodayTaskItem } from '@/lib/today';
 import { useStore } from '@/store';
@@ -91,10 +90,6 @@ export default function TodayDashboard() {
         {data.shortageTasks.length > 0 && <Section title="부족 시간 경고" icon={<AlertTriangle className="h-4 w-4 text-amber-600" />}>
           <div className="space-y-2" role="status">{data.shortageTasks.map((item) => <button type="button" key={item.task.id} className="w-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-left text-sm text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500" onClick={() => setDrawerTask(item.task.id)}><span className="block font-medium">{item.task.title}</span><span>마감 전 필요한 시간이 {formatDuration(item.shortageMinutes)} 부족합니다.</span></button>)}</div>
         </Section>}
-
-        <Section title="일정 배치 필요" icon={<CalendarClock className="h-4 w-4" />} count={data.schedulableTasks.length}>
-          {data.schedulableTasks.length ? <div className="space-y-3">{data.schedulableTasks.slice(0, 4).map((item) => <div key={item.task.id} className="flex items-center justify-between gap-3"><TaskLine item={item} onOpen={setDrawerTask} /><button type="button" className="btn min-h-10 shrink-0 px-3 text-xs" onClick={() => openAutoSchedule(item.task.id)} aria-label={`${item.task.title} 빈 시간에 배치`}>배치</button></div>)}</div> : <Empty text="일정 배치가 필요한 할 일이 없습니다." />}
-        </Section>
 
         <Section title="마감 임박" icon={<ListTodo className="h-4 w-4" />} count={data.urgentTasks.length}>
           {data.urgentTasks.length ? <div className="space-y-2">{data.urgentTasks.slice(0, 5).map((item) => <TaskLine key={item.task.id} item={item} onOpen={setDrawerTask} />)}</div> : <Empty text="3일 이내 마감되는 할 일이 없습니다." />}
