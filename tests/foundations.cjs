@@ -28,6 +28,41 @@ async function main() {
   const { eventColors, contrastText, contrastRatio } = load('src/lib/theme/contrast.ts');
   assert.equal(normalizeCategory(undefined), 'other');
   assert.equal(normalizeCategory('invalid'), 'other');
+  assert.equal(EVENT_CATEGORIES.length, 8);
+  const exampleCustomId = 'custom-' + 'a'.repeat(32);
+  assert.equal(normalizeCategory(exampleCustomId), exampleCustomId);
+  assert.equal(normalizeCategory('custom-bad;}.category-hospital{color:red'), 'other');
+  const categoryPrefs = load('src/lib/calendar/categoryPreferences.ts');
+  assert.equal(categoryPrefs.SUGGESTED_CATEGORY_COLORS.length, 10);
+  assert.equal(categoryPrefs.getSuggestedCategoryColor([]), categoryPrefs.SUGGESTED_CATEGORY_COLORS[0]);
+  assert.equal(categoryPrefs.getSuggestedCategoryColor([categoryPrefs.SUGGESTED_CATEGORY_COLORS[0]]), categoryPrefs.SUGGESTED_CATEGORY_COLORS[1]);
+  const oldStorage = globalThis.localStorage;
+  const oldCrypto = globalThis.crypto;
+  const storage = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key),
+  };
+  if (!globalThis.crypto) globalThis.crypto = require('node:crypto').webcrypto;
+  const categoryState = categoryPrefs.useCategoryPreferences;
+  categoryState.getState().setLabel('hospital', '병동');
+  const customItem = categoryState.getState().addCustomCategory('결혼 준비', '#aabbcc');
+  assert.equal(normalizeCategory(customItem.id), customItem.id);
+  assert.equal(categoryState.getState().customCategories.length, 1);
+  assert.throws(() => categoryState.getState().addCustomCategory('결혼 준비', '#aabbcc'), /같은 이름/);
+  categoryState.getState().updateCustomCategory(customItem.id, { label: '결혼식', color: '#112233' });
+  assert.equal(categoryState.getState().customCategories[0].color, '#112233');
+  categoryState.getState().reset();
+  assert.equal(categoryState.getState().labels.hospital, undefined);
+  assert.equal(categoryState.getState().customCategories.length, 1);
+  categoryState.setState({ customCategories: [] });
+  categoryState.getState().hydrate();
+  assert.equal(categoryState.getState().customCategories[0].label, '결혼식');
+  assert.equal(categoryState.getState().customCategories[0].id, customItem.id);
+  if (oldStorage === undefined) delete globalThis.localStorage;
+  else globalThis.localStorage = oldStorage;
+  if (oldCrypto === undefined) delete globalThis.crypto;
   assert.equal(getCalendarTheme('bad').id, 'soft-pastel');
   assert.equal(CALENDAR_THEMES.length, 3);
   for (const theme of CALENDAR_THEMES) for (const category of EVENT_CATEGORIES) {
@@ -330,6 +365,13 @@ async function main() {
   assert.ok(categoryEditorSource.includes('카테고리 편집'));
   assert.ok(categoryEditorSource.includes('카테고리 이름'));
   assert.ok(categoryEditorSource.includes('표시 색상'));
+  assert.ok(categoryEditorSource.includes('새 카테고리 추가'));
+  assert.ok(categoryEditorSource.includes('추천 컬러'));
+  assert.ok(categoryEditorSource.includes('새 카테고리 색상 직접 선택'));
+  const categoryPickerSource=fs.readFileSync(path.join(root,'src/components/CategorySelect.tsx'),'utf8');
+  assert.ok(categoryPickerSource.includes('customCategories.map'));
+  const dynamicStyleSource=fs.readFileSync(path.join(root,'src/components/CalendarThemeStyles.tsx'),'utf8');
+  assert.ok(dynamicStyleSource.includes('customCategories.map'));
   const categoryPreferencesSource=fs.readFileSync(path.join(root,'src/lib/calendar/categoryPreferences.ts'),'utf8');
   assert.ok(categoryPreferencesSource.includes('CATEGORY_PREFERENCES_STORAGE_KEY'));
   const detailsSource=fs.readFileSync(path.join(root,'src/components/TaskDetailsDrawer.tsx'),'utf8');
