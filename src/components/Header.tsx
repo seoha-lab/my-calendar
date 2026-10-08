@@ -39,45 +39,4 @@ export default function Header({ onQuickAdd }: Props) {
       <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <CalendarDays className="w-6 h-6 text-blue-600" />
-          <Link href="/" className="text-lg font-semibold"><span className="hidden sm:inline">Clarity</span><span className="sr-only sm:hidden">캘린더</span></Link>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href={{ pathname: '/today' }} className="btn btn-ghost min-h-10 px-2.5" aria-label="Today" title="Today"><CalendarCheck2 className="h-4 w-4" /><span className="hidden lg:inline">Today</span></Link>
-          <div
-            className={`hidden md:flex items-center gap-2 border border-gray-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 px-3 h-10 transition-all duration-300 ease-out ${focused ? 'w-[70vw] lg:w-[560px] xl:w-[720px]' : 'w-[260px] lg:w-[320px]'}`}
-          >
-            <Search className="w-4 h-4 text-gray-500" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("Search tasks…")}
-              aria-label={t("Search tasks")}
-              className="outline-none text-sm placeholder:text-gray-400 bg-transparent text-current w-full min-w-0"
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && search.trim()) { e.preventDefault(); setAiOpen(true); } }}
-            />
-            <button
-              className="btn btn-ghost h-8 px-2 -mr-1"
-              aria-label={t("Ask AI")}
-              title={t("Ask AI about your tasks")}
-              onClick={() => { if (search.trim()) setAiOpen(true); }}
-            >
-              <Sparkles className="w-4 h-4 text-blue-600" />
-            </button>
-          </div>
-          <button className="btn btn-icon btn-ghost" aria-label={hideDone ? t("Show done") : t("Hide done")} title={hideDone ? t("Show Done") : t("Hide Done")} onClick={toggleHideDone}>
-            {hideDone ? <Eye className="w-4 h-4"/> : <EyeOff className="w-4 h-4"/>}
-          </button>
-          <button className="btn btn-icon btn-ghost" aria-label={t("Toggle theme")} title={t("Toggle theme")}
-            onClick={() => { applyTheme('toggle'); try { setIsDark(document.documentElement.classList.contains('dark')); } catch {} }}>
-            {isDark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
-          </button>
-          <button className="btn btn-icon btn-primary" onClick={onQuickAdd} aria-label={t("Open Quick Add (Cmd/Ctrl+K)")} title={t("Quick Add")}><Plus className="w-4 h-4"/></button>
-          <Link href="/settings" className="btn btn-icon btn-ghost" aria-label={t("Settings")} title={t("Settings")}><Settings className="w-4 h-4"/></Link>
-        </div>
-      </div>
-      <AISearchPanel open={aiOpen} query={search} onClose={() => setAiOpen(false)} />
-    </header>
-  );
-}
+          <Link href="/" className="text-lg font-semib...[truncated]
