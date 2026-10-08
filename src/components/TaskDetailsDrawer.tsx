@@ -222,7 +222,7 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold">{t("Task Details")}</h3>
+          <h3 className="font-semibold">{local?.isEvent ? '일정 상세 · 편집' : '할 일 상세 · 편집'}</h3>
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500 min-w-[60px] text-right">{saving === 'saving' ? t("Saving…") : saving === 'saved' ? t("Saved") : ''}</span>
             <button
@@ -294,7 +294,26 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
               />
             </div>
           </div>
-          <CategorySelect value={local.category} onChange={(category) => setLocal({ ...local, category })} />
+          {local.isEvent ? (
+            <section className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-800/60" aria-label="일정 카테고리 편집">
+              <div className="mb-2">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">일정 카테고리 편집</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">일정을 선택한 뒤 여기에서 카테고리를 변경할 수 있습니다.</p>
+              </div>
+              <CategorySelect
+                label="카테고리 선택"
+                value={local.category}
+                onChange={(category) => {
+                  setLocal({ ...local, category });
+                  void updateTask(task.id, { category })
+                    .then(() => toast('일정 카테고리를 변경했습니다.'))
+                    .catch(() => toast('카테고리 저장에 실패했습니다.'));
+                }}
+              />
+            </section>
+          ) : (
+            <CategorySelect value={local.category} onChange={(category) => setLocal({ ...local, category })} />
+          )}
           <DescriptionEditor value={local.description ?? ''} onChange={(v) => setLocal({ ...local, description: v })} />
           <TaskSchedulingFields value={local} onChange={(patch) => setLocal({ ...local, ...patch })} />
           <RangesTimeline taskId={task.id} highlightRangeId={highlightRangeId} />

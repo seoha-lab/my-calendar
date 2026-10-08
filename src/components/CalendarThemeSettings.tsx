@@ -4,9 +4,12 @@ import { useCalendarTheme } from '@/lib/theme/calendarThemeStore';
 import { EVENT_CATEGORIES } from '@/lib/calendar/categories';
 import { messages } from '@/lib/i18n';
 import { toast } from '@/lib/toast';
+import { useCategoryPreferences } from '@/lib/calendar/categoryPreferences';
 export default function CalendarThemeSettings() {
   const themeId = useCalendarTheme((state) => state.themeId);
   const selectTheme = useCalendarTheme((state) => state.selectTheme);
+  const labels = useCategoryPreferences((state) => state.labels);
+  const colors = useCategoryPreferences((state) => state.colors);
   return <fieldset className="card p-4 space-y-3 lg:col-span-2">
     <legend className="font-medium px-1">{messages.calendarTheme}</legend>
     <p className="text-sm text-gray-600 dark:text-gray-300">{messages.themeDescription}</p>
@@ -19,8 +22,8 @@ export default function CalendarThemeSettings() {
         </span>
         <span className="grid grid-cols-2 gap-x-3 gap-y-2 mt-3">
           {EVENT_CATEGORIES.map((category) => <span key={category} className="flex items-center gap-2 text-xs">
-            <span className="h-3 w-3 rounded-full shrink-0" style={{ background: theme.categoryColors[category] }} aria-hidden="true" />
-            {messages.categories[category]}
+            <span className="h-3 w-3 rounded-full shrink-0" style={{ background: colors[category] || theme.categoryColors[category] }} aria-hidden="true" />
+            {labels[category] || messages.categories[category]}
           </span>)}
         </span>
       </label>)}

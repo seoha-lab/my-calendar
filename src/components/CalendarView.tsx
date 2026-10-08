@@ -9,6 +9,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@/store';
 import { normalizeCategory } from '@/lib/calendar/categories';
+import { useCategoryPreferences } from '@/lib/calendar/categoryPreferences';
 import { messages } from '@/lib/i18n';
 import { shiftAssignmentToCalendarEvent, toLocalDateKey } from '@/lib/shifts';
 import { openShiftManager } from '@/lib/shifts/ui';
@@ -28,6 +29,7 @@ export default function CalendarView() {
   const deleteTask = useStore((s) => s.deleteTask);
   const calendars = useStore((s) => s.calendars);
   const hideDone = useStore((s) => s.hideDone);
+  const categoryLabels = useCategoryPreferences((state) => state.labels);
   const shiftTypes = useStore((s) => s.shiftTypes);
   const shiftAssignments = useStore((s) => s.shiftAssignments);
   const calendarRef = useRef<any>(null);
@@ -374,8 +376,8 @@ export default function CalendarView() {
             if (s && e) {
               const opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' };
               const range = `${s.toLocaleString('ko-KR', opts)} – ${e.toLocaleString('ko-KR', opts)}`;
-              el.title = `${messages.categories[normalizeCategory(info.event.extendedProps.category)]} • ${range}`;
-              try { el.setAttribute('aria-label', `${info.event.title}, ${messages.categories[normalizeCategory(info.event.extendedProps.category)]}: ${range}`); } catch {}
+              el.title = `${categoryLabels[normalizeCategory(info.event.extendedProps.category)] || messages.categories[normalizeCategory(info.event.extendedProps.category)]} • ${range}`;
+              try { el.setAttribute('aria-label', `${info.event.title}, ${categoryLabels[normalizeCategory(info.event.extendedProps.category)] || messages.categories[normalizeCategory(info.event.extendedProps.category)]}: ${range}`); } catch {}
             }
           } catch {}
         }}

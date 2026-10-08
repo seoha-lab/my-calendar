@@ -323,6 +323,15 @@ async function main() {
   assert.ok(calendarSource.includes("kind: 'taskDue'"));
   assert.ok(calendarSource.includes('dayCellDidMount'));
   assert.ok(calendarSource.includes("openQuickAdd('', { sheet: 'event'"));
+  const taskBoardSource=fs.readFileSync(path.join(root,'src/components/TaskBoard.tsx'),'utf8');
+  assert.ok(taskBoardSource.includes('!t.isEvent && match(t)'));
+  assert.ok(taskBoardSource.includes("openQuickAdd('', { sheet: 'task' })"));
+  const categoryEditorSource=fs.readFileSync(path.join(root,'src/components/CategorySettings.tsx'),'utf8');
+  assert.ok(categoryEditorSource.includes('카테고리 편집'));
+  assert.ok(categoryEditorSource.includes('카테고리 이름'));
+  assert.ok(categoryEditorSource.includes('표시 색상'));
+  const categoryPreferencesSource=fs.readFileSync(path.join(root,'src/lib/calendar/categoryPreferences.ts'),'utf8');
+  assert.ok(categoryPreferencesSource.includes('CATEGORY_PREFERENCES_STORAGE_KEY'));
   const detailsSource=fs.readFileSync(path.join(root,'src/components/TaskDetailsDrawer.tsx'),'utf8');
   assert.ok(detailsSource.includes('이 일정만 삭제'));
   assert.ok(detailsSource.includes('이 일정 및 이후 삭제'));
