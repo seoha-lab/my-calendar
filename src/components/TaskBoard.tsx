@@ -5,13 +5,12 @@ import TaskCard from './TaskCard';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '@/store';
 import TaskDetailsDrawer from './TaskDetailsDrawer';
-import { Plus, ArrowUpDown, Sunrise, Sun, Sunset, AlertTriangle, CalendarClock } from 'lucide-react';
+import { Plus, ArrowUpDown, Sunrise, Sun, Sunset, AlertTriangle } from 'lucide-react';
 import { addDays, isBefore, isSameDay, startOfDay } from 'date-fns';
 import { DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { openQuickAdd } from '@/lib/quickAdd';
-import { openAutoSchedule } from '@/lib/scheduling/ui';
 
 export default function TaskBoard() {
   const tasksMap = useStore((s) => s.tasks);
@@ -84,11 +83,6 @@ export default function TaskBoard() {
   const gridCols = 'md:grid-cols-4';
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className="flex justify-end">
-        <button className="btn flex min-h-10 items-center gap-2" onClick={() => openAutoSchedule()}>
-          <CalendarClock className="h-4 w-4" />할 일 자동 배치
-        </button>
-      </div>
       <div id="kanban-root" className={`grid grid-cols-1 ${gridCols} gap-4 flex-1 min-h-0 overflow-hidden items-stretch`}>
       <DndContext sensors={sensors} onDragEnd={async (e: DragEndEvent) => {
         const activeId = String(e.active.id);
