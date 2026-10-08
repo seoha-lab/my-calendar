@@ -8,7 +8,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@/store';
-import { normalizeCategory } from '@/lib/calendar/categories';
+import { normalizeCategory, type DefaultEventCategory } from '@/lib/calendar/categories';
 import { useCategoryPreferences } from '@/lib/calendar/categoryPreferences';
 import { messages } from '@/lib/i18n';
 import { shiftAssignmentToCalendarEvent, toLocalDateKey } from '@/lib/shifts';
@@ -30,6 +30,17 @@ export default function CalendarView() {
   const calendars = useStore((s) => s.calendars);
   const hideDone = useStore((s) => s.hideDone);
   const categoryLabels = useCategoryPreferences((state) => state.labels);
+  const additionalCategories = useCategoryPreferences((state) => state.customCategories);
+  const getCategoryLabel = (value: unknown): string => {
+    const category = normalizeCategory(value);
+    const extra = additionalCategories.find((item) => item.id === category);
+    if (extra) return extra.label;
+    if (category in messages.categories) {
+      const key = category as DefaultEventCategory;
+      return categoryLabels[key] || messages.categories[key];
+    }
+    return '추가 카테고리';
+  };
   const shiftTypes = useStore((s) => s.shiftTypes);
   const shiftAssignments = useStore((s) => s.shiftAssignments);
   const calendarRef = useRef<any>(null);
@@ -376,8 +387,8 @@ export default function CalendarView() {
             if (s && e) {
               const opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' };
               const range = `${s.toLocaleString('ko-KR', opts)} – ${e.toLocaleString('ko-KR', opts)}`;
-              el.title = `${categoryLabels[normalizeCategory(info.event.extendedProps.category)] || messages.categories[normalizeCategory(info.event.extendedProps.category)]} • ${range}`;
-              try { el.setAttribute('aria-label', `${info.event.title}, ${categoryLabels[normalizeCategory(info.event.extendedProps.category)] || messages.categories[normalizeCategory(info.event.extendedProps.category)]}: ${range}`); } catch {}
+              el.title = `${getCategoryLabel(info.event.extendedProps.category)} • ${range}`;
+              try { el.setAttribute('aria-label', `${info.event.title}, ${getCategoryLabel(info.event.extendedProps.category)}: ${range}`); } catch {}
             }
           } catch {}
         }}
