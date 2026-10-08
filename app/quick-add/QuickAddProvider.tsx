@@ -8,13 +8,14 @@ import QuickAdd from '@/components/QuickAdd';
 import { useEffect, useState } from 'react';
 import { setupSWClient } from '@/lib/sw-client';
 import { toast } from '@/lib/toast';
-import { registerQuickAddOpen } from '@/lib/quickAdd';
+import { registerQuickAddOpen, type QuickAddOptions } from '@/lib/quickAdd';
 import AutoScheduleModal from '@/components/AutoScheduleModal';
 
 export default function QuickAddProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [initialText, setInitialText] = useState('');
   const [initialMode, setInitialMode] = useState<'quick'|'notes'>('quick');
+  const [initialOptions, setInitialOptions] = useState<QuickAddOptions>({ sheet: 'event' });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -26,6 +27,7 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
           if (prev) return false; // close if already open
           setInitialText('');
           setInitialMode('quick');
+          setInitialOptions({ sheet: 'event' });
           return true; // open otherwise
         });
       }
@@ -34,6 +36,7 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
     registerQuickAddOpen((prefill, options) => {
       setInitialText(prefill ?? '');
       setInitialMode(options?.mode || 'quick');
+      setInitialOptions(options || { sheet: 'event' });
       setOpen(true);
     });
     return () => {
@@ -49,11 +52,4 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
   return (
     <>
       <CalendarThemeStyles />
-      <Header onQuickAdd={() => { setInitialText(''); setInitialMode('quick'); setOpen(true); }} />
-      {children}
-      <QuickAdd open={open} initialText={initialText} initialMode={initialMode} onClose={() => setOpen(false)} />
-      <ShiftManagerModal />
-      <AutoScheduleModal />
-    </>
-  );
-}
+      <Header onQuickAdd={() => { setInitialText(''); setInit...[truncated]
