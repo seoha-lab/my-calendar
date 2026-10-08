@@ -3,6 +3,7 @@ import { t, interpolate } from '@/lib/i18n';
 
 import { useEffect, useState } from 'react';
 import CalendarThemeSettings from '@/components/CalendarThemeSettings';
+import CategorySettings from '@/components/CategorySettings';
 import ShiftSettings from '@/components/ShiftSettings';
 import FreeTimeSettings from '@/components/FreeTimeSettings';
 import { normalizeCategory } from '@/lib/calendar/categories';
@@ -96,6 +97,7 @@ export default function SettingsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CalendarThemeSettings />
+        <CategorySettings />
         <ShiftSettings />
         <FreeTimeSettings />
         {/* AI Assistant */}
