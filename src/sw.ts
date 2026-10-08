@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-/* Minimal service worker for Clarity with Serwist precache support */
+/* Minimal service worker for Daymo with Serwist precache support */
 import { precacheAndRoute } from "serwist/legacy";
 declare const self: ServiceWorkerGlobalScope & { __SW_MANIFEST: unknown };
 
