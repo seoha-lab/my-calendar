@@ -10,8 +10,9 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useStore } from '@/store';
 import { normalizeCategory } from '@/lib/calendar/categories';
 import { messages } from '@/lib/i18n';
-import { shiftAssignmentToCalendarEvent } from '@/lib/shifts';
+import { shiftAssignmentToCalendarEvent, toLocalDateKey } from '@/lib/shifts';
 import { openShiftManager } from '@/lib/shifts/ui';
+import { openQuickAdd } from '@/lib/quickAdd';
 
 const FullCalendar = dynamic(() => import('@fullcalendar/react'), { ssr: false });
 const FullCalendarAny: any = FullCalendar;
@@ -119,6 +120,28 @@ export default function CalendarView() {
       if (!enabledCals.has(t.calendarId) || t.hiddenOnCalendar) continue;
       if (hideDone && (t.checked || t.stage === 'done')) continue;
       if (!filterText(t)) continue;
+      if (!t.isEvent) {
+        const anchor = t.deadline || t.createdAt;
+        const anchorDate = anchor ? toLocalDateKey(new Date(anchor)) : undefined;
+        if (anchorDate) {
+          list.push({
+            id: t.id + ':task-due',
+            title: t.title,
+            start: anchorDate,
+            allDay: true,
+            editable: false,
+            extendedProps: {
+              kind: 'taskDue',
+              taskId: t.id,
+              category: normalizeCategory(t.category),
+              checked: t.checked,
+              stage: t.stage,
+              priority: t.priority,
+              hasDeadline: !!t.deadline,
+            },
+          });
+        }
+      }
       const hasMultiRanges = Array.isArray(t.ranges) && t.ranges.length > 1;
       const ranges = (t.ranges && t.ranges.length > 0) ? t.ranges : (t.start && t.end ? [{ id: 'primary', taskId: t.id, start: t.start, end: t.end, allDay: t.allDay }] as any[] : []);
       for (const r of ranges) {
@@ -145,7 +168,7 @@ export default function CalendarView() {
     const typesById = new Map(shiftTypes.map((type) => [type.id, type]));
     for (const assignment of Object.values(shiftAssignments)) {
       const type = typesById.get(assignment.shiftTypeId);
-      if (!type || !type.enabled) continue;
+      if (!type || !type.enabled || type.isOff) continue;
       list.push(shiftAssignmentToCalendarEvent(assignment, type));
     }
     return list;
@@ -157,12 +180,12 @@ export default function CalendarView() {
         ref={calendarRef}
         locale={koLocale}
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView={typeof window !== 'undefined' && window.innerWidth < 640 ? 'timeGridDay' : 'timeGridFourDay'}
+        initialView="dayGridMonth"
         views={{
           timeGridFourDay: { type: 'timeGrid', duration: { days: 4 }, buttonText: '4일' },
         }}
         customButtons={{
-          shiftPlanner: { text: '근무', click: () => openShiftManager(undefined, 'single') },
+          shiftPlanner: { text: '근무 입력', click: () => openShiftManager(undefined, 'month') },
         }}
         buttonText={{
           today: '오늘',
@@ -176,18 +199,19 @@ export default function CalendarView() {
           try {
             const d = arg.date as Date;
             const wd = d.toLocaleDateString('ko-KR', { weekday: 'short' });
+            if (arg.view?.type === 'dayGridMonth') return wd;
             const n = d.getDate();
             const now = new Date();
             const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-            return { html: `<span class="fc-dow">${wd}</span><span class="fc-date-badge ${isToday ? 'is-today' : ''}">${n}</span>` } as any;
+            return { html: '<span class="fc-dow">' + wd + '</span><span class="fc-date-badge ' + (isToday ? 'is-today' : '') + '">' + n + '</span>' } as any;
           } catch {
-            return { text: arg.text } as any;
+            return arg.text;
           }
         }}
-        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'shiftPlanner timeGridFourDay,timeGridWeek,timeGridDay,dayGridMonth' }}
+        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'shiftPlanner dayGridMonth,timeGridWeek,timeGridDay' }}
         height="100%"
         expandRows={true}
-        dayMaxEventRows={3}
+        dayMaxEventRows={4}
         nowIndicator={true}
         selectable={true}
         selectMirror={true}
@@ -197,6 +221,7 @@ export default function CalendarView() {
         eventClassNames={(arg: any) => {
           const ep: any = arg.event.extendedProps || {};
           if (ep.kind === 'shift') return 'fc-event-minimal fc-shift-event category-hospital';
+          if (ep.kind === 'taskDue') return 'fc-event-minimal fc-task-due category-' + normalizeCategory(ep.category);
           const key = ep.taskId || String(arg.event.id);
           const base = creatingIds.current.has(key) ? 'fc-event-minimal fc-event-creating' : 'fc-event-minimal';
           return `${base} category-${normalizeCategory(ep.category)}${ep.hasMultiRanges ? ' fc-event-has-multi' : ''}`;
@@ -212,10 +237,16 @@ export default function CalendarView() {
               </div>
             );
           }
+          if (ep.kind === 'taskDue') {
+            return <div className="fc-month-task-row"><span className="fc-month-task-check">{ep.checked ? '✓' : '□'}</span><span className={'fc-month-task-title ' + (ep.checked ? 'line-through opacity-60' : '')}>{arg.event.title}</span>{ep.priority === 'high' && <span className="fc-month-task-priority">!</span>}</div>;
+          }
           const done = ep.subDone ?? 0;
           const total = ep.subTotal ?? 0;
           const strike = (ep.checked || ep.stage === 'done') ? 'line-through' : '';
           const hasTime = !!arg.timeText;
+          if (arg.view?.type === 'dayGridMonth') {
+            return <div className="fc-month-event-row"><span className={'fc-month-event-title ' + strike}>{arg.event.title}</span></div>;
+          }
           // Compact layout for short timed events (<= 30 minutes)
           const start = arg.event.start as Date | null;
           const end = arg.event.end as Date | null;
@@ -259,61 +290,23 @@ export default function CalendarView() {
         }}
         editable
         droppable
-        dateClick={async (info: any) => {
+        dateClick={(info: any) => {
           try { window.dispatchEvent(new CustomEvent('calendar-date-selected', { detail: { date: info.dateStr.slice(0, 10) } })); } catch {}
-          const clicks = (info.jsEvent as MouseEvent | undefined)?.detail ?? 1;
-          if (clicks < 2) return;
-          // Ignore double-clicks originating on existing events to avoid accidental duplicates
-          try {
-            const target = (info.jsEvent as MouseEvent | undefined)?.target as HTMLElement | undefined;
-            if (target && (target.closest('.fc-event') || target.closest('.fc-daygrid-event'))) return;
-          } catch {}
-          const api = calendarRef.current?.getApi?.();
-          const viewType = api?.view?.type;
-          // Create event based on the clicked context
-          const allDay = !!info.allDay;
-          let start = new Date(info.date);
-          let end = new Date(start.getTime() + (allDay ? 24 * 60 * 60 * 1000 : 30 * 60 * 1000));
-          const created = await createTask({
-            title: '',
-            description: undefined,
-            stage: 'todo',
-            checked: false,
-            start: start.toISOString(),
-            end: end.toISOString(),
-            allDay,
-            hiddenOnCalendar: false,
-            linkedTo: undefined,
-            parentId: null,
-            subTasks: undefined,
-            calendarId: 'local',
-          } as any);
-          try { creatingIds.current.add(created.id); } catch {}
-          try { window.dispatchEvent(new CustomEvent('open-task-details', { detail: { id: created.id } })); } catch {}
         }}
-        select={async (arg: any) => {
-          try {
-            const start = arg.start as Date;
-            const end = (arg.end as Date) || new Date(start.getTime() + 60 * 60 * 1000);
-            const allDay = !!arg.allDay;
-            const created = await createTask({
-              title: '',
-              description: undefined,
-              stage: 'todo',
-              checked: false,
-              start: start.toISOString(),
-              end: end.toISOString(),
-              allDay,
-              hiddenOnCalendar: false,
-              linkedTo: undefined,
-              parentId: null,
-              subTasks: undefined,
-              calendarId: 'local',
-            } as any);
-            try { creatingIds.current.add(created.id); } catch {}
-            try { window.dispatchEvent(new CustomEvent('open-task-details', { detail: { id: created.id } })); } catch {}
-            try { calendarRef.current?.getApi?.().unselect?.(); } catch {}
-          } catch {}
+        dayCellDidMount={(arg: any) => {
+          arg.el.ondblclick = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (target && (target.closest('.fc-event') || target.closest('.fc-daygrid-event'))) return;
+            event.preventDefault();
+            event.stopPropagation();
+            openQuickAdd('', { sheet: 'event', date: toLocalDateKey(arg.date as Date), direct: true });
+          };
+        }}
+        dayCellWillUnmount={(arg: any) => { arg.el.ondblclick = null; }}
+        select={(arg: any) => {
+          const date = toLocalDateKey(arg.start as Date);
+          openQuickAdd('', { sheet: 'event', date, direct: true });
+          try { calendarRef.current?.getApi?.().unselect?.(); } catch {}
         }}
         eventClick={(info: any) => {
           try {

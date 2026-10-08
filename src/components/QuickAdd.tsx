@@ -2,12 +2,12 @@
 import { t, interpolate } from '@/lib/i18n';
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { containsKorean, parseKoreanInput, parseQuickInput, extractDateTimeHints, type ParsedHint, type ParsedKoreanInput } from '@/lib/nlp';
+import { containsKorean, parseKoreanInput, parseQuickInput, extractDateTimeHints, type ParsedEvent, type ParsedHint, type ParsedKoreanInput } from '@/lib/nlp';
 import { z } from 'zod';
 import { useStore } from '@/store';
 import { toast } from '@/lib/toast';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
-import { CalendarClock, Loader2, Trash2, Wand2, ListPlus, Plus } from 'lucide-react';
+import { CalendarDays, CheckSquare2, Keyboard, Loader2, Trash2, Wand2, ListPlus, Plus } from 'lucide-react';
 import CategorySelect from './CategorySelect';
 import type { EventCategory } from '@/lib/calendar/categories';
 import DateTimePicker from '@/components/DateTimePicker';
@@ -16,231 +16,210 @@ import TaskSchedulingFields, { type TaskSchedulingValue } from '@/components/Tas
 
 const schema = z.object({ title: z.string().min(1) });
 
-type Props = { open: boolean; onClose: () => void; initialText?: string; initialMode?: 'quick'|'notes' };
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  initialText?: string;
+  initialMode?: 'quick'|'notes';
+  initialSheet?: 'event'|'task';
+  initialDate?: string;
+  initialDirect?: boolean;
+};
 
-export default function QuickAdd({ open, onClose, initialText = '', initialMode = 'quick' }: Props) {
+type DirectEventDraft = {
+  title: string;
+  date: string;
+  allDay: boolean;
+  startTime: string;
+  endTime: string;
+  category: EventCategory;
+  location: string;
+  note: string;
+};
+
+function localDateKey(date = new Date()) {
+  return String(date.getFullYear()) + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
+}
+
+function defaultDirect(date?: string): DirectEventDraft {
+  return { title:'', date:date || localDateKey(), allDay:false, startTime:'09:00', endTime:'10:00', category:'other', location:'', note:'' };
+}
+
+export default function QuickAdd({ open, onClose, initialText='', initialMode='quick', initialSheet='event', initialDate, initialDirect=false }: Props) {
   const [text, setText] = useState('');
+  const [taskTitle, setTaskTitle] = useState('');
   const [category, setCategory] = useState<EventCategory>('other');
   const [error, setError] = useState<string | null>(null);
   const [hints, setHints] = useState<ParsedHint[]>([]);
   const [mode, setMode] = useState<'quick'|'notes'>('quick');
+  const [sheet, setSheet] = useState<'event'|'task'>('event');
+  const [direct, setDirect] = useState(false);
+  const [directEvent, setDirectEvent] = useState<DirectEventDraft>(() => defaultDirect());
   const [preview, setPreview] = useState<ParsedKoreanInput | null>(null);
-  const [showPlanning, setShowPlanning] = useState(false);
-  const [planning, setPlanning] = useState<TaskSchedulingValue>({ priority: 'medium' });
+  const [planning, setPlanning] = useState<TaskSchedulingValue>({ priority:'medium' });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const notesRef = useRef<HTMLTextAreaElement | null>(null);
   const createTask = useStore((s) => s.createTask);
 
   useEffect(() => {
+    if (!open) return;
+    setText(initialText || '');
+    setTaskTitle('');
+    setCategory('other');
+    setPreview(null);
+    setPlanning({ priority:'medium' });
+    setMode(initialMode || 'quick');
+    setSheet(initialSheet || 'event');
+    setDirect(!!initialDirect);
+    setDirectEvent(defaultDirect(initialDate));
+    setError(null);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [open, initialText, initialMode, initialSheet, initialDate, initialDirect]);
+
+  useEffect(() => {
+    try { setHints(text ? extractDateTimeHints(text) : []); } catch { setHints([]); }
+  }, [text]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (!open) {
-          setText('');
-          setError(null);
-        }
-      }
+      if (!open) return;
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, onClose]);
 
-  useEffect(() => {
-    if (open) {
-      setText(initialText || '');
-      setCategory('other');
-      setPreview(null);
-      setShowPlanning(false);
-      setPlanning({ priority: 'medium' });
-      setMode(initialMode || 'quick');
-      inputRef.current?.focus();
-    }
-  }, [open, initialText, initialMode]);
-
-  // Live parse hints from the current text
-  useEffect(() => {
-    try {
-      if (!text) { setHints([]); return; }
-      setHints(extractDateTimeHints(text));
-    } catch { setHints([]); }
-  }, [text]);
-
-  const buildHighlightHTML = (s: string, spans: ParsedHint[]) => {
-    if (!s) return '';
-    const esc = (t: string) => t
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-    const sorted = [...spans].sort((a, b) => (a.start - b.start) || (a.end - b.end));
-    let html = '';
-    let i = 0;
+  const buildHighlightHTML = (value: string, spans: ParsedHint[]) => {
+    if (!value) return '';
+    const esc = (v: string) => v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const sorted=[...spans].sort((a,b)=>(a.start-b.start)||(a.end-b.end));
+    let html=''; let i=0;
     for (const h of sorted) {
-      if (h.start < i) continue; // skip overlaps
-      if (h.start > i) html += esc(s.slice(i, h.start));
-      const cls = h.kind === 'time' ? 'qa-inline-time' : h.kind === 'date' ? 'qa-inline-date' : 'qa-inline-datetime';
-      html += `<span class=\"qa-inline ${cls}\">${esc(s.slice(h.start, h.end))}</span>`;
-      i = h.end;
+      if (h.start < i) continue;
+      if (h.start > i) html += esc(value.slice(i,h.start));
+      const cls = h.kind==='time' ? 'qa-inline-time' : h.kind==='date' ? 'qa-inline-date' : 'qa-inline-datetime';
+      html += '<span class="qa-inline ' + cls + '">' + esc(value.slice(h.start,h.end)) + '</span>';
+      i=h.end;
     }
-    if (i < s.length) html += esc(s.slice(i));
+    if (i<value.length) html += esc(value.slice(i));
     return html;
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (containsKorean(text)) {
-      setError(null);
-      setPreview(parseKoreanInput(text, new Date()));
-      return;
-    }
-    const { task, errors } = parseQuickInput(text);
-    if (errors?.length) {
-      setError(errors.join(', '));
-      return;
-    }
-    const parsed = schema.safeParse({ title: task.title ?? '' });
-    if (!parsed.success) {
-      setError(t("Title required"));
-      return;
-    }
-    try {
-      // Use parsed times when present; default to today all-day otherwise
-      let startISO = task.start;
-      let endISO = task.end;
-      let allDay = task.allDay ?? false;
-
-      if (!startISO) {
-        // No date/time parsed: create an all-day task for today
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-        startISO = start.toISOString();
-        endISO = end.toISOString();
-        allDay = true;
-      } else if (allDay) {
-        // Ensure all-day range aligns to midnight boundaries without extending duration
-        const s = new Date(startISO);
-        const start = new Date(s.getFullYear(), s.getMonth(), s.getDate(), 0, 0, 0, 0);
-        startISO = start.toISOString();
-        if (endISO) {
-          // If parser already produced an exclusive midnight end, keep it as-is (no +1 day)
-          const e = new Date(endISO);
-          const endAligned = new Date(e.getFullYear(), e.getMonth(), e.getDate(), 0, 0, 0, 0);
-          let end = endAligned;
-          // Safety: ensure end > start
-          if (end.getTime() <= start.getTime()) {
-            end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-          }
-          endISO = end.toISOString();
-        } else {
-          endISO = new Date(start.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  const enterDirect = () => {
+    let next = defaultDirect(initialDate);
+    const source=text.trim();
+    if (source) {
+      if (containsKorean(source)) {
+        const parsed=parseKoreanInput(source,new Date());
+        if (parsed.kind==='event') {
+          next={ title:parsed.title || source, date:parsed.date || next.date, allDay:!!parsed.allDay, startTime:parsed.startTime || next.startTime, endTime:parsed.endTime || next.endTime, category:parsed.category, location:parsed.location || '', note:parsed.note || '' };
         }
-      } else {
-        // Timed: ensure we have an end fallback (+1h)
-        if (!endISO && startISO) {
-          const s = new Date(startISO);
-          endISO = new Date(s.getTime() + 60 * 60 * 1000).toISOString();
-        }
-      }
-
-      await createTask({
-        title: task.title!,
-        category,
-        deadline: planning.deadline,
-        estimatedMinutes: planning.estimatedMinutes,
-        priority: planning.priority ?? 'medium',
-        description: task.description,
-        stage: (task.stage ?? 'todo'),
-        checked: task.checked ?? false,
-        start: startISO,
-        end: endISO,
-        allDay,
-        isEvent: task.isEvent ?? true,
-        hiddenOnCalendar: task.hiddenOnCalendar ?? false,
-        linkedTo: task.linkedTo,
-        parentId: task.parentId ?? null,
-        subTasks: task.subTasks,
-        calendarId: task.calendarId ?? 'local',
-      } as any);
-      toast(t("Task created."));
-      setText('');
-      onClose();
-    } catch (err) {
-      setError((err as Error).message);
+      } else next.title=source;
     }
+    setDirectEvent(next);
+    setDirect(true);
+    setError(null);
   };
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setText('');
-        onClose();
-      }
+  const submitNatural = () => {
+    const value=text.trim();
+    if (!value) { setError('일정을 입력해 주세요.'); return; }
+    if (containsKorean(value)) { setPreview(parseKoreanInput(value,new Date())); setError(null); return; }
+    const result=parseQuickInput(value);
+    if (result.errors?.length) { setError(result.errors.join(', ')); return; }
+    const parsed=schema.safeParse({ title:result.task.title ?? '' });
+    if (!parsed.success) { setError('일정 제목을 입력해 주세요.'); return; }
+    const start=result.task.start ? new Date(result.task.start) : new Date();
+    const end=result.task.end ? new Date(result.task.end) : new Date(start.getTime()+3600000);
+    const date=localDateKey(start);
+    const startTime=String(start.getHours()).padStart(2,'0') + ':' + String(start.getMinutes()).padStart(2,'0');
+    const endTime=String(end.getHours()).padStart(2,'0') + ':' + String(end.getMinutes()).padStart(2,'0');
+    setPreview({ kind:'event', title:result.task.title || value, category, date, startTime, endTime, allDay:!!result.task.allDay, confidence:1, ambiguities:[] });
+  };
+
+  const previewDirect = () => {
+    if (!directEvent.title.trim()) { setError('일정 이름을 입력해 주세요.'); return; }
+    if (!directEvent.date) { setError('날짜를 선택해 주세요.'); return; }
+    if (!directEvent.allDay && (!directEvent.startTime || !directEvent.endTime)) { setError('시작시간과 종료시간을 선택해 주세요.'); return; }
+    const event: ParsedEvent = {
+      kind:'event', title:directEvent.title.trim(), date:directEvent.date,
+      startTime:directEvent.allDay ? undefined : directEvent.startTime,
+      endTime:directEvent.allDay ? undefined : directEvent.endTime,
+      allDay:directEvent.allDay, category:directEvent.category,
+      location:directEvent.location.trim() || undefined, note:directEvent.note.trim() || undefined,
+      confidence:1, ambiguities:[],
     };
-    if (open) window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    setPreview(event);
+    setError(null);
+  };
+
+  const saveTask = async () => {
+    const title=taskTitle.trim();
+    if (!title) { setError('할 일 이름을 입력해 주세요.'); return; }
+    try {
+      await createTask({ title, category, deadline:planning.deadline, priority:planning.priority ?? 'medium', stage:'todo', checked:false, isEvent:false, hiddenOnCalendar:false, parentId:null, calendarId:'local' } as any);
+      toast('할 일을 저장했습니다.');
+      onClose();
+    } catch (e) { setError(e instanceof Error ? e.message : '할 일을 저장하지 못했습니다.'); }
+  };
 
   if (!open) return null;
+
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/40 dark:bg-black/60 backdrop-blur-sm flex items-start justify-center p-4" onClick={() => { setText(''); onClose(); }}>
-      <div onClick={(e) => e.stopPropagation()} className="card max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto p-4 sm:p-5">
-
-        {preview && <QuickAddPreview value={preview} onChange={setPreview} onBack={() => setPreview(null)} onSaved={() => { setText(''); setPreview(null); onClose(); }} />}
-
-        {mode === 'quick' && !preview && (
-          <form onSubmit={submit}>
-            <div className="mb-3"><CategorySelect value={category} onChange={setCategory} /></div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 relative">
-                {/* Highlights overlay (behind input text) */}
-                <div
-                  aria-hidden
-                  className="absolute inset-0 pointer-events-none px-3 py-2 whitespace-pre overflow-hidden select-none qa-inline-layer"
-                  dangerouslySetInnerHTML={{ __html: buildHighlightHTML(text, hints) }}
-                />
-                {mode === 'quick' && (
-                  <div aria-hidden className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 dark:text-gray-500 pointer-events-none hidden sm:block">
-                    {t("Press Tab for Bulk Add")}</div>
-                )}
-                <input
-                  ref={inputRef}
-                  className="input"
-                  aria-label={t("Quick Add")}
-                  placeholder={t("E.g., \"Design review\" tomorrow 2 PM !event")}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Tab') {
-                      e.preventDefault();
-                      setMode('notes');
-                      setTimeout(() => { try { notesRef.current?.focus(); } catch {} }, 0);
-                    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                      // Cmd/Ctrl+Enter also submits in Quick mode
-                      e.preventDefault();
-                      // Find the nearest form and submit
-                      (e.currentTarget.closest('form') as HTMLFormElement | null)?.requestSubmit();
-                    }
-                  }}
-                  style={{ background: 'transparent', position: 'relative' }}
-                />
-              </div>
-              {/* No explicit button; Enter/Cmd+Enter submits */}
-            </div>
-            <div className="mt-3">
-              <button type="button" className="btn inline-flex min-h-10 items-center gap-2" onClick={() => setShowPlanning((value) => !value)} aria-expanded={showPlanning}>
-                <CalendarClock className="h-4 w-4" />{showPlanning ? '계획 정보 닫기' : 'Task 계획 추가'}
-              </button>
-            </div>
-            {showPlanning && <div className="mt-3"><TaskSchedulingFields value={planning} onChange={(patch) => setPlanning((current) => ({ ...current, ...patch }))} /></div>}
-            {error && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{error}</p>}
-          </form>
-        )}
-
-        {mode === 'notes' && (
+    <div role="dialog" aria-modal="true" aria-label="추가" className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-3 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div onClick={(e)=>e.stopPropagation()} className="card max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-y-auto p-4 sm:p-5">
+        {preview ? (
+          <QuickAddPreview value={preview} onChange={setPreview} onBack={()=>setPreview(null)} onSaved={()=>{setPreview(null);onClose();}} />
+        ) : mode==='notes' ? (
           <DraftFromNotesInsideQuickAdd onClose={onClose} textAreaRef={notesRef} />
+        ) : (
+          <div className="space-y-4">
+            <div className="flex rounded-xl bg-gray-100 p-1 dark:bg-slate-800" role="tablist" aria-label="추가할 항목">
+              <button type="button" role="tab" aria-selected={sheet==='event'} className={'flex-1 rounded-lg px-3 py-2 text-sm font-semibold ' + (sheet==='event'?'bg-white shadow-sm dark:bg-slate-700':'text-gray-500')} onClick={()=>{setSheet('event');setError(null);}}><CalendarDays className="mr-1.5 inline h-4 w-4"/>일정</button>
+              <button type="button" role="tab" aria-selected={sheet==='task'} className={'flex-1 rounded-lg px-3 py-2 text-sm font-semibold ' + (sheet==='task'?'bg-white shadow-sm dark:bg-slate-700':'text-gray-500')} onClick={()=>{setSheet('task');setError(null);}}><CheckSquare2 className="mr-1.5 inline h-4 w-4"/>할 일</button>
+            </div>
+
+            {sheet==='event' ? (
+              direct ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3"><div><p className="font-semibold">일정 직접 입력</p><p className="text-xs text-gray-500">날짜, 시간, 카테고리를 직접 선택합니다.</p></div><button type="button" className="btn" onClick={()=>setDirect(false)}>자연어 입력</button></div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span>일정 이름</span><input className="input" value={directEvent.title} onChange={(e)=>setDirectEvent({...directEvent,title:e.target.value})} placeholder="예: 교수님 미팅"/></label>
+                    <label className="flex flex-col gap-1 text-sm"><span>날짜</span><input className="input" type="date" value={directEvent.date} onChange={(e)=>setDirectEvent({...directEvent,date:e.target.value})}/></label>
+                    <CategorySelect value={directEvent.category} onChange={(nextCategory)=>setDirectEvent({...directEvent,category:nextCategory})}/>
+                    <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={directEvent.allDay} onChange={(e)=>setDirectEvent({...directEvent,allDay:e.target.checked})}/>하루 종일</label>
+                    {!directEvent.allDay && <>
+                      <label className="flex flex-col gap-1 text-sm"><span>시작시간</span><input className="input" type="time" value={directEvent.startTime} onChange={(e)=>setDirectEvent({...directEvent,startTime:e.target.value})}/></label>
+                      <label className="flex flex-col gap-1 text-sm"><span>종료시간</span><input className="input" type="time" value={directEvent.endTime} onChange={(e)=>setDirectEvent({...directEvent,endTime:e.target.value})}/></label>
+                    </>}
+                    <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span>장소</span><input className="input" value={directEvent.location} onChange={(e)=>setDirectEvent({...directEvent,location:e.target.value})} placeholder="장소 없음"/></label>
+                    <label className="flex flex-col gap-1 text-sm sm:col-span-2"><span>메모</span><textarea className="input min-h-20" value={directEvent.note} onChange={(e)=>setDirectEvent({...directEvent,note:e.target.value})}/></label>
+                  </div>
+                  {error && <p className="text-sm text-red-600">{error}</p>}
+                  <div className="sticky bottom-0 flex justify-end gap-2 border-t border-gray-100 bg-white pt-3 pb-[max(4px,env(safe-area-inset-bottom))] dark:border-slate-800 dark:bg-slate-900"><button className="btn" onClick={onClose}>취소</button><button className="btn btn-primary" onClick={previewDirect}>저장 전 확인</button></div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div><label className="mb-1 block text-sm font-medium">일정 자연어 입력</label><div className="relative">
+                    <div aria-hidden className="absolute inset-0 pointer-events-none px-3 py-2 whitespace-pre overflow-hidden select-none qa-inline-layer" dangerouslySetInnerHTML={{__html:buildHighlightHTML(text,hints)}}/>
+                    <button type="button" className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-500 dark:border-slate-700 dark:bg-slate-900" onClick={enterDirect}><Keyboard className="mr-1 inline h-3.5 w-3.5"/>Tab · 직접 입력</button>
+                    <input ref={inputRef} className="input pr-32" aria-label="일정 자연어 입력" placeholder="예: 매주 월수금 오전 9시 수영" value={text} onChange={(e)=>setText(e.target.value)} onKeyDown={(e)=>{if(e.key==='Tab'){e.preventDefault();enterDirect();}else if(e.key==='Enter'){e.preventDefault();submitNatural();}}} style={{background:'transparent',position:'relative'}}/>
+                  </div></div>
+                  <div className="flex items-center justify-between gap-3"><button type="button" className="text-xs text-gray-500 underline-offset-4 hover:underline" onClick={()=>setMode('notes')}>메모에서 여러 항목 추가</button><span className="text-xs text-gray-500">Enter로 확인 · Tab으로 직접 입력</span></div>
+                  {error && <p className="text-sm text-red-600">{error}</p>}
+                  <div className="sticky bottom-0 flex justify-end gap-2 border-t border-gray-100 bg-white pt-3 pb-[max(4px,env(safe-area-inset-bottom))] dark:border-slate-800 dark:bg-slate-900"><button className="btn" onClick={onClose}>취소</button><button className="btn btn-primary" disabled={!text.trim()} onClick={submitNatural}>내용 확인</button></div>
+                </div>
+              )
+            ) : (
+              <div className="space-y-4">
+                <label className="flex flex-col gap-1 text-sm"><span className="font-medium">할 일 이름</span><input className="input" aria-label="할 일 이름" value={taskTitle} onChange={(e)=>setTaskTitle(e.target.value)} placeholder="예: 논문 초록 수정"/></label>
+                <CategorySelect value={category} onChange={setCategory}/>
+                <TaskSchedulingFields value={planning} onChange={(patch)=>setPlanning((current)=>({...current,...patch}))}/>
+                {error && <p className="text-sm text-red-600">{error}</p>}
+                <div className="sticky bottom-0 flex justify-end gap-2 border-t border-gray-100 bg-white pt-3 pb-[max(4px,env(safe-area-inset-bottom))] dark:border-slate-800 dark:bg-slate-900"><button className="btn" onClick={onClose}>취소</button><button className="btn btn-primary" disabled={!taskTitle.trim()} onClick={()=>void saveTask()}>할 일 저장</button></div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

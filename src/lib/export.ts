@@ -13,10 +13,10 @@ export function buildICS({ events, todos }: { events: Task[]; todos: Task[] }): 
   const lines: string[] = [];
   lines.push('BEGIN:VCALENDAR');
   lines.push('VERSION:2.0');
-  lines.push('PRODID:-//Clarity//EN');
+  lines.push('PRODID:-//Daymo//EN');
   for (const ev of events) {
     lines.push('BEGIN:VEVENT');
-    lines.push(`UID:${ev.id}@clarity.local`);
+    lines.push(`UID:${ev.id}@daymo.local`);
     lines.push(`SUMMARY:${escapeICS(ev.title)}`);
     if (ev.category) lines.push(`CATEGORIES:${escapeICS(ev.category)}`);
     if (ev.description) lines.push(`DESCRIPTION:${escapeICS(ev.description)}`);
@@ -26,7 +26,7 @@ export function buildICS({ events, todos }: { events: Task[]; todos: Task[] }): 
   }
   for (const td of todos) {
     lines.push('BEGIN:VTODO');
-    lines.push(`UID:${td.id}@clarity.local`);
+    lines.push(`UID:${td.id}@daymo.local`);
     lines.push(`SUMMARY:${escapeICS(td.title)}`);
     if (td.category) lines.push(`CATEGORIES:${escapeICS(td.category)}`);
     if (td.description) lines.push(`DESCRIPTION:${escapeICS(td.description)}`);

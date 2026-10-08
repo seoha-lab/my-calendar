@@ -8,14 +8,13 @@ import { toast } from '@/lib/toast';
 import { Task, SubTask, Stage } from '@/types';
 import { format } from '@/lib/i18n/date';
 import { isSameDay, isSameYear, isToday, isTomorrow, isYesterday, isWithinInterval, differenceInMinutes } from 'date-fns';
-import { Trash2, Copy, X, Plus, Zap, Loader2, CalendarClock } from 'lucide-react';
+import { Trash2, Copy, X, Plus, Zap, Loader2 } from 'lucide-react';
 import CategorySelect from './CategorySelect';
 import DateTimePicker from '@/components/DateTimePicker';
 import { SUBTASKS_SYSTEM_PROMPT } from '@/lib/prompts';
 import { LS_AI_KEY, LS_AI_MODEL, DEFAULT_MODEL_ID } from '@/lib/ai';
 import { findConflicts, getCombinedBusyIntervals } from '@/lib/scheduling';
 import TaskSchedulingFields from '@/components/TaskSchedulingFields';
-import { openAutoSchedule } from '@/lib/scheduling/ui';
 
 type Props = { open: boolean; taskId?: string | null; highlightRangeId?: string; onClose: () => void };
 
@@ -25,10 +24,12 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
   const task = useStore((s) => (taskId ? s.tasks[taskId] : undefined));
   const updateTask = useStore((s) => s.updateTask);
   const deleteTask = useStore((s) => s.deleteTask);
+  const deleteRangeTop = useStore((s) => s.deleteRange);
   const createTask = useStore((s) => s.createTask);
 
   const [local, setLocal] = useState<Task | undefined>(task);
   const [saving, setSaving] = useState<'idle'|'saving'|'saved'>('idle');
+  const [recurringDeleteOpen, setRecurringDeleteOpen] = useState(false);
   const lastSaved = useRef<string>('');
   // Only reset local state when switching tasks; avoid overriding while typing
   useEffect(() => setLocal(task), [taskId]);
@@ -96,10 +97,41 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
 
   const remove = async () => {
     if (!task) return;
+    const ranges = task.ranges ?? [];
+    if (highlightRangeId && ranges.length > 1 && ranges.some((range) => range.id === highlightRangeId)) {
+      setRecurringDeleteOpen(true);
+      return;
+    }
     const ok = window.confirm(t("Delete this task? This action cannot be undone."));
     if (!ok) return;
     await deleteTask(task.id);
     toast(t("Task deleted."));
+    onClose();
+  };
+
+  const deleteRecurringOnly = async () => {
+    if (!task || !highlightRangeId) return;
+    await deleteRangeTop(highlightRangeId);
+    toast('선택한 일정만 삭제했습니다.');
+    setRecurringDeleteOpen(false);
+    onClose();
+  };
+
+  const deleteRecurringFuture = async () => {
+    if (!task || !highlightRangeId) return;
+    const ranges = [...(task.ranges ?? [])].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    const selected = ranges.find((range) => range.id === highlightRangeId);
+    if (!selected) return;
+    const selectedTime = new Date(selected.start).getTime();
+    const future = ranges.filter((range) => new Date(range.start).getTime() >= selectedTime);
+    const before = ranges.length - future.length;
+    if (before === 0) {
+      await deleteTask(task.id);
+    } else {
+      for (const range of future) await deleteRangeTop(range.id);
+    }
+    toast('선택한 일정과 이후 반복 일정을 삭제했습니다.');
+    setRecurringDeleteOpen(false);
     onClose();
   };
 
@@ -219,6 +251,17 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
             </button>
           </div>
         </div>
+        {recurringDeleteOpen && (
+          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+            <p className="font-semibold">반복 일정 삭제</p>
+            <p className="mt-1">이 일정만 삭제할지, 이 일정부터 앞으로의 반복 일정을 모두 삭제할지 선택해 주세요.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className="btn" onClick={() => setRecurringDeleteOpen(false)}>취소</button>
+              <button type="button" className="btn" onClick={() => void deleteRecurringOnly()}>이 일정만 삭제</button>
+              <button type="button" className="btn btn-primary" onClick={() => void deleteRecurringFuture()}>이 일정 및 이후 삭제</button>
+            </div>
+          </div>
+        )}
         {!task || !local ? (
           <div className="py-24 text-center text-sm text-gray-500">{t("Loading…")}</div>
         ) : (
@@ -254,7 +297,6 @@ export default function TaskDetailsDrawer({ open, taskId, highlightRangeId, onCl
           <CategorySelect value={local.category} onChange={(category) => setLocal({ ...local, category })} />
           <DescriptionEditor value={local.description ?? ''} onChange={(v) => setLocal({ ...local, description: v })} />
           <TaskSchedulingFields value={local} onChange={(patch) => setLocal({ ...local, ...patch })} />
-          <button type="button" className="btn btn-primary flex min-h-11 w-full items-center justify-center gap-2" disabled={!local.deadline || !local.estimatedMinutes || local.checked} onClick={async () => { await updateTask(task.id, sanitize(local)); openAutoSchedule(task.id); }}><CalendarClock className="h-4 w-4" />빈 시간에 배치</button>
           <RangesTimeline taskId={task.id} highlightRangeId={highlightRangeId} />
           <SubtasksEditor task={local} setTask={setLocal} />
           {linked.length > 0 && (

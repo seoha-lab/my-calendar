@@ -15,6 +15,9 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
   const [open, setOpen] = useState(false);
   const [initialText, setInitialText] = useState('');
   const [initialMode, setInitialMode] = useState<'quick'|'notes'>('quick');
+  const [initialSheet, setInitialSheet] = useState<'event'|'task'>('event');
+  const [initialDate, setInitialDate] = useState<string | undefined>(undefined);
+  const [initialDirect, setInitialDirect] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -26,6 +29,9 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
           if (prev) return false; // close if already open
           setInitialText('');
           setInitialMode('quick');
+          setInitialSheet('event');
+          setInitialDate(undefined);
+          setInitialDirect(false);
           return true; // open otherwise
         });
       }
@@ -34,6 +40,9 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
     registerQuickAddOpen((prefill, options) => {
       setInitialText(prefill ?? '');
       setInitialMode(options?.mode || 'quick');
+      setInitialSheet(options?.sheet || 'event');
+      setInitialDate(options?.date);
+      setInitialDirect(!!options?.direct);
       setOpen(true);
     });
     return () => {
@@ -49,9 +58,9 @@ export default function QuickAddProvider({ children }: { children: React.ReactNo
   return (
     <>
       <CalendarThemeStyles />
-      <Header onQuickAdd={() => { setInitialText(''); setInitialMode('quick'); setOpen(true); }} />
+      <Header onQuickAdd={() => { setInitialText(''); setInitialMode('quick'); setInitialSheet('event'); setInitialDate(undefined); setInitialDirect(false); setOpen(true); }} />
       {children}
-      <QuickAdd open={open} initialText={initialText} initialMode={initialMode} onClose={() => setOpen(false)} />
+      <QuickAdd open={open} initialText={initialText} initialMode={initialMode} initialSheet={initialSheet} initialDate={initialDate} initialDirect={initialDirect} onClose={() => setOpen(false)} />
       <ShiftManagerModal />
       <AutoScheduleModal />
     </>

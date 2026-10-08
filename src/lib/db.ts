@@ -3,7 +3,7 @@
 */
 import { normalizeCategory } from '@/lib/calendar/categories';
 import { Task, CalendarSource, Stage, TaskRange, ShiftAssignment, ShiftType } from '@/types';
-import type { ShiftAssignmentInput } from '@/lib/shifts/ShiftProvider';
+import type { ShiftAssignmentInput, ShiftTypeInput } from '@/lib/shifts/ShiftProvider';
 
 type WorkerMsg =
   | { id: string; type: 'init' }
@@ -141,6 +141,13 @@ function rowToShiftAssignment(row: any): ShiftAssignment {
     createdAt: String(row.createdAt),
     updatedAt: String(row.updatedAt),
   };
+}
+
+function validateShiftTypeTimes(startTime: string | null, endTime: string | null, crossesMidnight: boolean) {
+  const pattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+  if (!pattern.test(startTime ?? '') || !pattern.test(endTime ?? '')) throw new Error('유효한 근무 시간을 입력해 주세요.');
+  const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+  if (!crossesMidnight && minutes(endTime!) <= minutes(startTime!)) throw new Error('종료시간은 시작시간보다 늦어야 합니다.');
 }
 
 export const db = {
@@ -405,6 +412,70 @@ export const db = {
     return rows.map(rowToShiftType);
   },
 
+  async createShiftType(input: ShiftTypeInput): Promise<ShiftType> {
+    await ensureReady();
+    const code = input.code.trim().toUpperCase();
+    const name = input.name.trim();
+    if (!code || !name) throw new Error('근무 코드와 이름을 입력해 주세요.');
+    const existing = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT id FROM shift_types WHERE UPPER(code) = UPPER(?)', params: [code] });
+    if (existing.length) throw new Error('이미 사용 중인 근무 코드입니다.');
+    const isOff = !!input.isOff;
+    const startTime = isOff ? null : input.startTime;
+    const endTime = isOff ? null : input.endTime;
+    if (!isOff) validateShiftTypeTimes(startTime, endTime, input.crossesMidnight);
+    const orderRows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT COALESCE(MAX(sortOrder),0) AS maxOrder FROM shift_types', params: [] });
+    const sortOrder = input.sortOrder ?? Number(orderRows[0]?.maxOrder ?? 0) + 10;
+    const id = crypto.randomUUID();
+    await call({
+      id: crypto.randomUUID(),
+      type: 'run',
+      sql: 'INSERT INTO shift_types(id,code,name,startTime,endTime,crossesMidnight,isOff,enabled,sortOrder) VALUES (?,?,?,?,?,?,?,?,?)',
+      params: [id, code, name, startTime, endTime, input.crossesMidnight ? 1 : 0, isOff ? 1 : 0, input.enabled === false ? 0 : 1, sortOrder],
+    });
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_types WHERE id = ?', params: [id] });
+    return rowToShiftType(rows[0]);
+  },
+
+  async updateShiftType(id: string, patch: Partial<ShiftTypeInput>): Promise<ShiftType> {
+    await ensureReady();
+    const currentRows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_types WHERE id = ?', params: [id] });
+    if (!currentRows[0]) throw new Error('근무 유형을 찾을 수 없습니다.');
+    const current = rowToShiftType(currentRows[0]);
+    const next = {
+      code: (patch.code ?? current.code).trim().toUpperCase(),
+      name: (patch.name ?? current.name).trim(),
+      startTime: patch.startTime === undefined ? current.startTime : patch.startTime,
+      endTime: patch.endTime === undefined ? current.endTime : patch.endTime,
+      crossesMidnight: patch.crossesMidnight ?? current.crossesMidnight,
+      isOff: patch.isOff ?? current.isOff,
+      enabled: patch.enabled ?? current.enabled,
+      sortOrder: patch.sortOrder ?? current.sortOrder,
+    };
+    if (!next.code || !next.name) throw new Error('근무 코드와 이름을 입력해 주세요.');
+    const duplicate = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT id FROM shift_types WHERE UPPER(code) = UPPER(?) AND id <> ?', params: [next.code, id] });
+    if (duplicate.length) throw new Error('이미 사용 중인 근무 코드입니다.');
+    if (next.isOff) {
+      next.startTime = null;
+      next.endTime = null;
+      next.crossesMidnight = false;
+    } else validateShiftTypeTimes(next.startTime, next.endTime, next.crossesMidnight);
+    await call({
+      id: crypto.randomUUID(),
+      type: 'run',
+      sql: 'UPDATE shift_types SET code=?, name=?, startTime=?, endTime=?, crossesMidnight=?, isOff=?, enabled=?, sortOrder=? WHERE id=?',
+      params: [next.code, next.name, next.startTime, next.endTime, next.crossesMidnight ? 1 : 0, next.isOff ? 1 : 0, next.enabled ? 1 : 0, next.sortOrder, id],
+    });
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_types WHERE id = ?', params: [id] });
+    return rowToShiftType(rows[0]);
+  },
+
+  async deleteShiftType(id: string): Promise<void> {
+    await ensureReady();
+    const used = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT COUNT(1) AS count FROM shift_assignments WHERE shiftTypeId = ?', params: [id] });
+    if (Number(used[0]?.count ?? 0) > 0) throw new Error('이미 입력된 근무가 있어 삭제할 수 없습니다. 대신 비활성화해 주세요.');
+    await call({ id: crypto.randomUUID(), type: 'run', sql: 'DELETE FROM shift_types WHERE id = ?', params: [id] });
+  },
+
   async listShiftAssignments(from?: string, to?: string): Promise<ShiftAssignment[]> {
     await ensureReady();
     let sql = 'SELECT * FROM shift_assignments';
@@ -455,6 +526,24 @@ export const db = {
     const dates = inputs.map((input) => input.date);
     const placeholders = dates.map(() => '?').join(',');
     const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: `SELECT * FROM shift_assignments WHERE date IN (${placeholders}) ORDER BY date ASC`, params: dates });
+    return rows.map(rowToShiftAssignment);
+  },
+
+  async applyShiftAssignmentChanges(upserts: ShiftAssignmentInput[], deleteDates: string[]): Promise<ShiftAssignment[]> {
+    await ensureReady();
+    const now = new Date().toISOString();
+    const statements = [
+      ...deleteDates.map((date) => ({ sql: 'DELETE FROM shift_assignments WHERE date = ?', params: [date] })),
+      ...upserts.map((input) => ({
+        sql: 'INSERT INTO shift_assignments(id, date, shiftTypeId, createdAt, updatedAt) VALUES (?,?,?,?,?) ON CONFLICT(date) DO UPDATE SET shiftTypeId = excluded.shiftTypeId, updatedAt = excluded.updatedAt',
+        params: [crypto.randomUUID(), input.date, input.shiftTypeId, now, now],
+      })),
+    ];
+    if (statements.length) await call({ id: crypto.randomUUID(), type: 'batch', statements });
+    if (!upserts.length) return [];
+    const dates = upserts.map((input) => input.date);
+    const placeholders = dates.map(() => '?').join(',');
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_assignments WHERE date IN (' + placeholders + ') ORDER BY date ASC', params: dates });
     return rows.map(rowToShiftAssignment);
   },
 

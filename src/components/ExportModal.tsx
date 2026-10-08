@@ -31,11 +31,11 @@ export default function ExportModal({ open, onClose }: Props) {
     const events = includeEvents ? filtered.filter((t) => t.isEvent) : [];
     const todos = includeTodos ? filtered.filter((t) => !t.isEvent) : [];
     const ics = buildICS({ events, todos });
-    downloadICS(ics, `clarity-${filenameDateStamp()}`);
+    downloadICS(ics, `daymo-${filenameDateStamp()}`);
   };
   const exportCSV = () => {
     const csv = buildCSV(filtered);
-    downloadCSV(csv, `clarity-${filenameDateStamp()}`);
+    downloadCSV(csv, `daymo-${filenameDateStamp()}`);
   };
 
   if (!open) return null;

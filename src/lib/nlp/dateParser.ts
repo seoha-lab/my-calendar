@@ -26,6 +26,16 @@ export function parseKoreanDate(input: string, referenceDate: Date): { date?: st
     return { date: dateKey(parsed), span: { start: explicit.index, end, text: input.slice(explicit.index, end) }, ambiguities };
   }
 
+  const dayOnly = /(^|\s)(\d{1,2})일(?:\s|$)/.exec(input);
+  if (dayOnly) {
+    const day = Number(dayOnly[2]);
+    const parsed = validLocalDate(referenceDate.getFullYear(), referenceDate.getMonth() + 1, day);
+    if (!parsed) return { ambiguities: ['날짜가 올바르지 않습니다.'] };
+    const start = dayOnly.index + dayOnly[1].length;
+    const text = dayOnly[2] + '일';
+    return { date: dateKey(parsed), span: { start, end: start + text.length, text }, ambiguities: [] };
+  }
+
   const relative = /(오늘|내일|모레)/.exec(input);
   if (relative) {
     const amount = relative[1] === '오늘' ? 0 : relative[1] === '내일' ? 1 : 2;

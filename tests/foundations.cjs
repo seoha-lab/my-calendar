@@ -1,3 +1,4 @@
+process.env.TZ = 'Asia/Seoul';
 // Uses the existing TypeScript dependency; no additional test runner needed.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -239,12 +240,21 @@ async function main() {
   assert.equal(parseKoreanInput('금요일 오전 9시 수영',reference).category,'exercise');
   assert.deepEqual(Object.fromEntries(Object.entries(parseKoreanInput('다음주 화요일 오후 2시 대학원 수업',reference)).filter(([key])=>['date','startTime','category','title'].includes(key))),{title:'대학원 수업',date:'2026-10-06',startTime:'14:00',category:'graduate'});
   assert.equal(parseKoreanInput('10월 5일 병원 교육',reference).category,'hospital');
-  assert.deepEqual({kind:parseKoreanInput('내일 나이트',reference).kind,date:parseKoreanInput('내일 나이트',reference).date,shiftCode:parseKoreanInput('내일 나이트',reference).shiftCode},{kind:'shift',date:'2026-10-03',shiftCode:'N7'});
-  assert.equal(parseKoreanInput('오늘 데이',reference).shiftCode,'D7');
+  assert.deepEqual({kind:parseKoreanInput('내일 나이트',reference).kind,date:parseKoreanInput('내일 나이트',reference).date,shiftCode:parseKoreanInput('내일 나이트',reference).shiftCode},{kind:'shift',date:'2026-10-03',shiftCode:'N'});
+  assert.equal(parseKoreanInput('오늘 데이',reference).shiftCode,'D');
   assert.equal(parseKoreanInput('금요일 오프',reference).shiftCode,'OFF');
   assert.equal(parseKoreanInput('10월 8일 D7',reference).shiftCode,'D7');
   assert.equal(parseKoreanInput('10월 9일 N7',reference).shiftCode,'N7');
   assert.equal(parseKoreanInput('10월 10일 OFF',reference).shiftCode,'OFF');
+  const allDayDate=parseKoreanInput('20일 하루종일 데이트',new Date(2026,9,8,16,0));
+  assert.deepEqual({kind:allDayDate.kind,date:allDayDate.date,allDay:allDayDate.allDay,title:allDayDate.title},{kind:'event',date:'2026-10-20',allDay:true,title:'데이트'});
+  const weekly=parseKoreanInput('매주 월수금 오전 9시 수영',new Date(2026,9,8,16,0));
+  assert.equal(weekly.kind,'event');
+  assert.equal(weekly.title,'수영');
+  assert.equal(weekly.startTime,'09:00');
+  assert.deepEqual(weekly.recurrence?.weekdays,[1,3,5]);
+  const { buildWeeklyOccurrenceDates }=load('src/lib/nlp/recurrence.ts');
+  assert.deepEqual(buildWeeklyOccurrenceDates('2026-10-09','2026-10-19',[1,3,5]),['2026-10-09','2026-10-12','2026-10-14','2026-10-16','2026-10-19']);
   const quickAddD7 = parseKoreanInput('오늘 오전 9시 수영',new Date(2026,9,1,8));
   const quickStart = new Date(localDateTimeToISO(quickAddD7.date,quickAddD7.startTime));
   const quickEnd = new Date(localDateTimeToISO(quickAddD7.date,quickAddD7.endTime));
@@ -277,7 +287,7 @@ async function main() {
   const workerSource = fs.readFileSync(path.join(root,'workers/db.worker.ts'),'utf8');
   const schema = workerSource.match(/function migrateSQL\(\): string \{\s*return `([\s\S]*?)`;/)[1];
   sqlDB.exec(schema);
-  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_types',returnValue:'resultRows',rowMode:'object'})[0].n,3);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_types',returnValue:'resultRows',rowMode:'object'})[0].n,7);
   const schedulingColumns=sqlDB.exec({sql:'PRAGMA table_info(tasks)',returnValue:'resultRows',rowMode:'object'}).map(column=>column.name);
   assert.ok(['deadline','estimatedMinutes','priority'].every(column=>schedulingColumns.includes(column)));
   sqlDB.exec({sql:'INSERT INTO tasks(id,title,stage,checked,createdAt,updatedAt,calendarId) VALUES (?,?,?,?,?,?,?)',bind:['legacy','기존 일정','todo',0,'2026-09-27','2026-09-27','local']});
@@ -302,6 +312,25 @@ async function main() {
   sqlDB.exec({sql:'DELETE FROM shift_assignments WHERE date = ?',bind:['2026-10-01']});
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_assignments',returnValue:'resultRows',rowMode:'object'})[0].n,0);
   sqlDB.close();
+  const quickAddSource=fs.readFileSync(path.join(root,'src/components/QuickAdd.tsx'),'utf8');
+  assert.ok(quickAddSource.includes('Tab · 직접 입력'));
+  assert.ok(quickAddSource.includes('할 일 이름'));
+  assert.ok(quickAddSource.includes('role="tab"'));
+  const schedulingSource=fs.readFileSync(path.join(root,'src/components/TaskSchedulingFields.tsx'),'utf8');
+  assert.ok(!schedulingSource.includes('예상 소요시간'));
+  const calendarSource=fs.readFileSync(path.join(root,'src/components/CalendarView.tsx'),'utf8');
+  assert.ok(calendarSource.includes('initialView="dayGridMonth"'));
+  assert.ok(calendarSource.includes("kind: 'taskDue'"));
+  assert.ok(calendarSource.includes('dayCellDidMount'));
+  assert.ok(calendarSource.includes("openQuickAdd('', { sheet: 'event'"));
+  const detailsSource=fs.readFileSync(path.join(root,'src/components/TaskDetailsDrawer.tsx'),'utf8');
+  assert.ok(detailsSource.includes('이 일정만 삭제'));
+  assert.ok(detailsSource.includes('이 일정 및 이후 삭제'));
+  assert.ok(detailsSource.includes('<CategorySelect value={local.category}'));
+  const layoutSource=fs.readFileSync(path.join(root,'app/layout.tsx'),'utf8');
+  assert.ok(layoutSource.includes("title: 'Daymo'"));
+  const manifestSource=fs.readFileSync(path.join(root,'public/manifest.webmanifest'),'utf8');
+  assert.ok(manifestSource.includes('"name": "Daymo"'));
   console.log('PASS: Today dashboard selectors, Task scheduling model/migration, remaining time, ranking, splitting, exact/partial/deadline/past handling, multi-task simulation, conflicts, shifts, timezone and SQLite preservation.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

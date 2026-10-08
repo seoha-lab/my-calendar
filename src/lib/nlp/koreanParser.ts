@@ -3,6 +3,7 @@ import { parseKoreanDate } from './dateParser';
 import { parseLocation } from './locationParser';
 import { parseShiftInput } from './shiftParser';
 import { parseKoreanTime } from './timeParser';
+import { firstWeeklyOccurrenceDate, parseWeeklyRecurrence } from './recurrence';
 import type { ParsedKoreanInput, TextSpan } from './types';
 
 function removeSpans(input: string, spans: (TextSpan | undefined)[]): string {
@@ -20,13 +21,19 @@ export function parseKoreanInput(input: string, referenceDate = new Date()): Par
   const trimmed = input.trim();
   const shift = parseShiftInput(trimmed, referenceDate);
   if (shift) return shift;
-  const date = parseKoreanDate(trimmed, referenceDate);
-  const time = parseKoreanTime(trimmed);
+  const recurrence = parseWeeklyRecurrence(trimmed);
+  const allDayMatch = /(하루\s*종일|하루종일|종일)/.exec(trimmed);
+  const allDaySpan = allDayMatch ? { start: allDayMatch.index, end: allDayMatch.index + allDayMatch[0].length, text: allDayMatch[0] } : undefined;
+  const time = allDayMatch ? { startTime: undefined, endTime: undefined, timePeriod: undefined, span: undefined, ambiguities: [] as string[] } : parseKoreanTime(trimmed);
+  const parsedDate = parseKoreanDate(trimmed, referenceDate);
+  const date = recurrence.recurrence
+    ? { date: firstWeeklyOccurrenceDate(recurrence.recurrence.weekdays, referenceDate, time.startTime), span: undefined, ambiguities: [] as string[] }
+    : parsedDate;
   const location = parseLocation(trimmed);
-  const title = removeSpans(trimmed, [date.span, time.span, location.span]);
+  const title = removeSpans(trimmed, [recurrence.span, date.span, allDaySpan, time.span, location.span]);
   const ambiguities = [...date.ambiguities, ...time.ambiguities];
-  if (!date.date) ambiguities.push('날짜를 선택해 주세요.');
-  if (!time.startTime && !time.timePeriod) ambiguities.push('시작 시간을 선택해 주세요.');
+  if (!date.date) ambiguities.push(recurrence.recurrence ? '반복 일정의 첫 날짜를 정할 수 없습니다.' : '날짜를 선택해 주세요.');
+  if (!allDayMatch && !time.startTime && !time.timePeriod) ambiguities.push('시작 시간을 선택해 주세요.');
   if (!title) ambiguities.push('일정 제목을 입력해 주세요.');
   return {
     kind: 'event',
@@ -37,7 +44,8 @@ export function parseKoreanInput(input: string, referenceDate = new Date()): Par
     endTime: time.endTime ?? (time.startTime ? addHour(time.startTime) : undefined),
     location: location.location,
     category: inferCategory(trimmed),
-    allDay: false,
+    allDay: !!allDayMatch,
+    recurrence: recurrence.recurrence,
     confidence: Math.max(0.2, 1 - ambiguities.length * 0.2),
     ambiguities: [...new Set(ambiguities)],
   };

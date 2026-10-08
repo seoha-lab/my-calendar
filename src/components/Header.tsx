@@ -39,7 +39,7 @@ export default function Header({ onQuickAdd }: Props) {
       <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <CalendarDays className="w-6 h-6 text-blue-600" />
-          <Link href="/" className="text-lg font-semibold"><span className="hidden sm:inline">Clarity</span><span className="sr-only sm:hidden">캘린더</span></Link>
+          <Link href="/" className="text-lg font-semibold"><span className="hidden sm:inline">Daymo</span><span className="sr-only sm:hidden">캘린더</span></Link>
         </div>
         <div className="flex items-center gap-2">
           <Link href={{ pathname: '/today' }} className="btn btn-ghost min-h-10 px-2.5" aria-label="Today" title="Today"><CalendarCheck2 className="h-4 w-4" /><span className="hidden lg:inline">Today</span></Link>
