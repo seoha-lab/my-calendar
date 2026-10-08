@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { calendarService } from '@/lib/calendar';
-import { shiftService, type ShiftAssignmentInput } from '@/lib/shifts';
+import { shiftService, type ShiftAssignmentInput, type ShiftTypeInput } from '@/lib/shifts';
 import { addDays, addHours } from 'date-fns';
 import { CalendarSource, ShiftAssignment, ShiftType, Stage, Task } from '@/types';
 
@@ -38,8 +38,12 @@ type Actions = {
   addRangesBatch: (groups: { taskId: string; ranges: { start: string; end: string; allDay?: boolean }[] }[]) => Promise<Task[]>;
   updateRange: (rangeId: string, patch: { start?: string; end?: string; allDay?: boolean }) => Promise<Task>;
   deleteRange: (rangeId: string) => Promise<Task>;
+  createShiftType: (input: ShiftTypeInput) => Promise<ShiftType>;
+  updateShiftType: (id: string, patch: Partial<ShiftTypeInput>) => Promise<ShiftType>;
+  deleteShiftType: (id: string) => Promise<void>;
   setShiftAssignment: (input: ShiftAssignmentInput) => Promise<ShiftAssignment>;
   setShiftAssignments: (inputs: ShiftAssignmentInput[]) => Promise<ShiftAssignment[]>;
+  applyShiftAssignmentChanges: (upserts: ShiftAssignmentInput[], deleteDates: string[]) => Promise<ShiftAssignment[]>;
   deleteShiftAssignment: (date: string) => Promise<void>;
 };
 
@@ -218,6 +222,21 @@ export const useStore = create<State & Actions>((set, get) => ({
     return t;
   },
 
+  createShiftType: async (input) => {
+    const shiftType = await shiftService.createShiftType(input);
+    set((state) => ({ shiftTypes: [...state.shiftTypes, shiftType].sort((a, b) => (a.sortOrder - b.sortOrder) || a.code.localeCompare(b.code)) }));
+    return shiftType;
+  },
+  updateShiftType: async (id, patch) => {
+    const shiftType = await shiftService.updateShiftType(id, patch);
+    set((state) => ({ shiftTypes: state.shiftTypes.map((item) => item.id === id ? shiftType : item).sort((a, b) => (a.sortOrder - b.sortOrder) || a.code.localeCompare(b.code)) }));
+    return shiftType;
+  },
+  deleteShiftType: async (id) => {
+    await shiftService.deleteShiftType(id);
+    set((state) => ({ shiftTypes: state.shiftTypes.filter((item) => item.id !== id) }));
+  },
+
   setShiftAssignment: async (input) => {
     const assignment = await shiftService.setShiftAssignment(input);
     set((state) => ({ shiftAssignments: { ...state.shiftAssignments, [assignment.date]: assignment } }));
@@ -232,6 +251,17 @@ export const useStore = create<State & Actions>((set, get) => ({
     });
     return assignments;
   },
+  applyShiftAssignmentChanges: async (upserts, deleteDates) => {
+    const assignments = await shiftService.applyShiftAssignmentChanges(upserts, deleteDates);
+    set((state) => {
+      const next = { ...state.shiftAssignments };
+      for (const date of deleteDates) delete next[date];
+      for (const assignment of assignments) next[assignment.date] = assignment;
+      return { shiftAssignments: next };
+    });
+    return assignments;
+  },
+
   deleteShiftAssignment: async (date) => {
     await shiftService.deleteShiftAssignment(date);
     set((state) => {
