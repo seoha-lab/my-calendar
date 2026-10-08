@@ -1,5 +1,5 @@
-import type { EventCategory } from '../calendar/categories';
-export type CalendarTheme = { id: string; name: string; categoryColors: Record<EventCategory, string> };
+import type { DefaultEventCategory } from '../calendar/categories';
+export type CalendarTheme = { id: string; name: string; categoryColors: Record<DefaultEventCategory, string> };
 export const CALENDAR_THEMES = [
   { id: 'soft-pastel', name: 'Soft Pastel', categoryColors: { hospital: '#D8A2A2', lecture: '#A9C9E8', graduate: '#C8B6D9', research: '#9FC5C1', study: '#F2DFA7', exercise: '#8EA66B', personal: '#F3C6A8', other: '#C9C7C1' } },
   { id: 'muted-sage-blue', name: 'Muted Sage & Blue', categoryColors: { hospital: '#C78383', lecture: '#91B9D6', graduate: '#AAA0C8', research: '#6FA5A2', study: '#D8BD78', exercise: '#8EA66B', personal: '#EAB9A1', other: '#AEB7B3' } },

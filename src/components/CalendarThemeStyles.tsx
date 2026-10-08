@@ -10,6 +10,7 @@ export default function CalendarThemeStyles() {
   const themeId = useCalendarTheme((state) => state.themeId);
   const hydrate = useCalendarTheme((state) => state.hydrate);
   const customColors = useCategoryPreferences((state) => state.colors);
+  const customCategories = useCategoryPreferences((state) => state.customCategories);
   const hydrateCategoryPreferences = useCategoryPreferences((state) => state.hydrate);
   useEffect(() => {
     hydrate();
@@ -22,9 +23,16 @@ export default function CalendarThemeStyles() {
     return () => window.removeEventListener('storage', onStorage);
   }, [hydrate, hydrateCategoryPreferences]);
   const theme = getCalendarTheme(themeId);
-  const css = [false, true].map((dark) => EVENT_CATEGORIES.map((category) => {
-    const colors = eventColors(customColors[category] || theme.categoryColors[category], dark);
-    return `${dark ? '.dark ' : ''}.category-${category} { --category-bg: ${colors.background}; --category-accent: ${colors.accent}; --category-text: ${colors.text}; }`;
-  }).join('\n')).join('\n');
+  const css = [false, true].map((dark) => {
+    const baseCss = EVENT_CATEGORIES.map((category) => {
+      const colors = eventColors(customColors[category] || theme.categoryColors[category], dark);
+      return `${dark ? '.dark ' : ''}.category-${category} { --category-bg: ${colors.background}; --category-accent: ${colors.accent}; --category-text: ${colors.text}; }`;
+    });
+    const additionalCss = customCategories.map((category) => {
+      const colors = eventColors(category.color, dark);
+      return `${dark ? '.dark ' : ''}.category-${category.id} { --category-bg: ${colors.background}; --category-accent: ${colors.accent}; --category-text: ${colors.text}; }`;
+    });
+    return [...baseCss, ...additionalCss].join('\n');
+  }).join('\n');
   return <style>{css}</style>;
 }
