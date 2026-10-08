@@ -13,7 +13,7 @@ export function buildICS({ events, todos }: { events: Task[]; todos: Task[] }): 
   const lines: string[] = [];
   lines.push('BEGIN:VCALENDAR');
   lines.push('VERSION:2.0');
-  lines.push('PRODID:-//Clarity//EN');
+  lines.push('PRODID:-//Daymo//EN');
   for (const ev of events) {
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:${ev.id}@clarity.local`);
@@ -44,28 +44,4 @@ export function downloadICS(ics: string, filenameBase: string) {
 }
 
 export function buildCSV(rows: Task[]): string {
-  const header = 'id,title,stage,start,end,checked,parentId,calendarId,category,deadline,estimatedMinutes,priority';
-  const escape = (val: string | number | boolean | null | undefined): string => {
-    if (val == null) return '';
-    const s = String(val);
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-      return '"' + s.replace(/"/g, '""') + '"';
-    }
-    return s;
-  };
-  const lines = rows.map((t) => [t.id, t.title, t.stage, t.start ?? '', t.end ?? '', t.checked, t.parentId ?? '', t.calendarId, t.category ?? 'other', t.deadline ?? '', t.estimatedMinutes ?? '', t.priority ?? 'medium'].map(escape).join(','));
-  return [header, ...lines].join('\n');
-}
-
-export function downloadCSV(csv: string, filenameBase: string) {
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  saveAs(blob, `${filenameBase}.csv`);
-}
-
-function escapeICS(text: string): string {
-  return text.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
-}
-
-export function filenameDateStamp(d = new Date()): string {
-  return formatISO9075(d, { representation: 'date' }).replace(/-/g, '');
-}
+  const header = 'id,title,stage,start,end,checked,parentId,calendarId,category,deadline,esti...[truncated]
