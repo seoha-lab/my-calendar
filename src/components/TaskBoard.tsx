@@ -53,7 +53,7 @@ export default function TaskBoard() {
   const { yesterday, today, tomorrow, overdue } = useMemo(() => {
     const all = Object.values(tasksMap);
     const match = (t: any) => !search || t.title.toLowerCase().includes(search) || (t.description ?? '').toLowerCase().includes(search);
-    const filtered = all.filter((t) => match(t) && !(hideDone && t.checked));
+    const filtered = all.filter((t) => !t.isEvent && match(t) && !(hideDone && t.checked));
     const y = startOfDay(addDays(new Date(), -1));
     const t0 = startOfDay(new Date());
     const t1 = startOfDay(addDays(new Date(), 1));
@@ -90,7 +90,7 @@ export default function TaskBoard() {
         if (!overId.startsWith('column:')) return;
         const target = overId.split(':')[1] as 'yesterday'|'today'|'tomorrow'|'overdue';
         const task = useStore.getState().tasks[activeId];
-        if (!task) return;
+        if (!task || task.isEvent) return;
         const base = target === 'yesterday' ? startOfDay(addDays(new Date(), -1)) : target === 'today' ? startOfDay(new Date()) : target === 'tomorrow' ? startOfDay(addDays(new Date(), 1)) : startOfDay(addDays(new Date(), -1));
         const dur = task.start && task.end ? (new Date(task.end).getTime() - new Date(task.start).getTime()) : (30 * 60 * 1000);
         let startISO: string | undefined;
@@ -126,7 +126,7 @@ export default function TaskBoard() {
       }}>
         <Column tone="yellow" id="yesterday" title={t("Yesterday")} icon={<Sunset className="w-4 h-4"/>} items={yesterday} onOpen={openDrawer} onToggle={toggleChecked} />
         <Column tone="blue" id="today" title={t("Today")} icon={<Sun className="w-4 h-4"/>} items={today} onOpen={openDrawer} onToggle={toggleChecked}
-          headerRight={<button className="btn btn-icon" aria-label={t("Quick Add")} title={t("Quick Add")} onClick={() => openQuickAdd('')}> <Plus className="w-4 h-4"/></button>} />
+          headerRight={<button className="btn btn-icon" aria-label={t("Quick Add")} title={t("Quick Add")} onClick={() => openQuickAdd('', { sheet: 'task' })}> <Plus className="w-4 h-4"/></button>} />
         <Column tone="gray" id="tomorrow" title={t("Tomorrow")} icon={<Sunrise className="w-4 h-4"/>} items={tomorrow} onOpen={openDrawer} onToggle={toggleChecked} />
         <Column tone="rose" id="overdue" title={t("Overdue")} icon={<AlertTriangle className="w-4 h-4"/>} items={overdue.slice().sort((a,b)=> {
             const cmp = overdueAsc ? (new Date(a.end||a.start||0).getTime())-(new Date(b.end||b.start||0).getTime()) : (new Date(b.end||b.start||0).getTime())-(new Date(a.end||a.start||0).getTime());
@@ -166,7 +166,7 @@ function Column({ id, title, items, onToggle, onOpen, tone, headerRight, icon }:
     if (!el) return;
     setScrolled(el.scrollTop > 0);
   }, []);
-  const openAdd = () => { openQuickAdd(''); };
+  const openAdd = () => { openQuickAdd('', { sheet: 'task' }); };
   return (
     <div ref={setNodeRef} className={`rounded-2xl h-full max-h-full overflow-hidden flex flex-col border ${cls.border} ${cls.bg} ${isOver ? 'ring-2 ring-blue-400' : ''}`} aria-label={interpolate('columnLabel', { title })}>
       {/* Fixed header (outside scroller) ensures perfect alignment across columns */}
