@@ -42,4 +42,52 @@ export default function TaskCard({ task, onToggle, onOpen, showFullDate = false 
     <div
       ref={ref}
       tabIndex={0}
-      className={`rounded-2xl border p-3 focus:ring-2 focus:ring-blue-500 outline-none fc-draggable-task cursor-gra���q�^
+      className={`rounded-2xl border p-3 focus:ring-2 focus:ring-blue-500 outline-none fc-draggable-task cursor-grab ${hueClass}`}
+      data-id={task.id}
+      data-title={task.title}
+      role="button"
+      onClick={() => onOpen(task.id)}
+    >
+      <div className="flex items-start gap-2">
+        {/* Color dot removed to keep card neutral against global background */}
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <input aria-label={t("Toggle done")} type="checkbox" className="checkbox-circle checkbox-2xl" checked={!!task.checked} onChange={(e) => { e.stopPropagation(); onToggle(task.id); }} onClick={(e) => e.stopPropagation()} />
+            <div className={`font-medium ${checkedClass}`}>{task.title}</div>
+            {task.linkedTo && task.linkedTo.length > 0 && <LinkIcon className="w-4 h-4 text-gray-400" />}
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <CategoryBadge category={task.category} />
+            {badge && <span className="text-xs px-2 py-0.5 rounded bg-white/70 text-gray-700 dark:bg-slate-700/50 dark:text-gray-200">{badge}</span>}
+            {task.deadline && <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-200">{deadlineBadge(task.deadline)}</span>}
+            {task.priority === 'high' && <span className="text-xs font-medium text-rose-600">높음</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatMinutes(minutes: number): string { return minutes < 60 ? `${minutes}분` : `${Math.floor(minutes / 60)}시간${minutes % 60 ? ` ${minutes % 60}분` : ''}`; }
+
+function deadlineBadge(deadline: string): string {
+  const target = new Date(deadline);
+  if (!Number.isFinite(target.getTime())) return '마감 확인';
+  const today = new Date();
+  const left = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const right = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const days = Math.round((right.getTime() - left.getTime()) / 86400000);
+  return days === 0 ? '오늘 마감' : days > 0 ? `D-${days}` : `D+${Math.abs(days)}`;
+}
+
+function cardHueClassesByStage(_stage: Stage): string {
+  // Neutral style for all tasks; strike-through indicates completion
+  return 'bg-white border-gray-200 text-slate-900 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-100';
+}
+
+function isOverdue(task: Task): boolean {
+  if (!task.end || task.checked) return false;
+  try {
+    return new Date(task.end).getTime() < Date.now();
+  } catch { return false; }
+}
