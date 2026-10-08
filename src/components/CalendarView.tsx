@@ -30,4 +30,404 @@ export default function CalendarView() {
   const hideDone = useStore((s) => s.hideDone);
   const shiftTypes = useStore((s) => s.shiftTypes);
   const shiftAssignments = useStore((s) => s.shiftAssignments);
-  const calendarRef = useRef<a���q�^
+  const calendarRef = useRef<any>(null);
+  // Re-render events instantly on theme change so inline colors refresh
+  useEffect(() => {
+    const onTheme = () => {
+      try {
+        const api = calendarRef.current?.getApi?.();
+        if (!api) return;
+        if (typeof (api as any).batchRendering === 'function') {
+          (api as any).batchRendering(() => {
+            (api as any).rerenderEvents?.();
+            api.updateSize();
+          });
+        } else {
+          (api as any).rerenderEvents?.();
+          api.updateSize();
+        }
+      } catch {}
+    };
+    window.addEventListener('clarity-theme-changed', onTheme as EventListener);
+    return () => window.removeEventListener('clarity-theme-changed', onTheme as EventListener);
+  }, []);
+  const creatingIds = useRef<Set<string>>(new Set());
+
+  // Live update event titles while editing in drawer
+  useEffect(() => {
+    const enqueue = (fn: () => void) => {
+      try { Promise.resolve().then(fn); } catch { setTimeout(fn, 0); }
+    };
+    const onTitle = (e: Event) => {
+      const { id, title } = (e as CustomEvent<{ id: string; title: string }>).detail || {} as any;
+      if (!id) return;
+      const api = calendarRef.current?.getApi?.();
+      if (!api) return;
+      const all = api.getEvents?.() || [];
+      const affected = all.filter((ev: any) => ev.extendedProps?.taskId === id || String(ev.id).startsWith(id + ':'));
+      enqueue(() => affected.forEach((ev: any) => ev.setProp('title', title ?? '')));
+    };
+    const onDone = (e: Event) => {
+      const { id, title } = (e as CustomEvent<{ id: string; title?: string }>).detail || {} as any;
+      if (!id) return;
+      enqueue(async () => {
+        const trimmed = String(title || '').trim();
+        const api = calendarRef.current?.getApi?.();
+        const ev = api?.getEventById?.(id);
+        creatingIds.current.delete(id);
+        if (!trimmed) {
+          try { await deleteTask(id); } catch {}
+          try { ev?.remove?.(); } catch {}
+          return;
+        }
+        try {
+          if (ev) ev.setProp('classNames', ['fc-event-minimal']);
+          // Also update all sibling occurrences for the same task id
+          const api = calendarRef.current?.getApi?.();
+          const all = api?.getEvents?.() || [];
+          const affected = all.filter((e: any) => e.extendedProps?.taskId === id || String(e.id).startsWith(id + ':'));
+          affected.forEach((e: any) => e.setProp('title', trimmed));
+        } catch {}
+      });
+    };
+    window.addEventListener('task-editing-title', onTitle as EventListener);
+    window.addEventListener('task-editing-done', onDone as EventListener);
+    return () => {
+      window.removeEventListener('task-editing-title', onTitle as EventListener);
+      window.removeEventListener('task-editing-done', onDone as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = document.getElementById('kanban-root');
+    if (!container) return;
+    const draggable = new Draggable(container, {
+      itemSelector: '.fc-draggable-task',
+      eventData: (el) => {
+        const id = el.getAttribute('data-id')!;
+        const title = el.getAttribute('data-title')!;
+        return { id, title };
+      },
+    });
+    return () => draggable.destroy();
+  }, []);
+
+  const calendarEvents = useMemo(() => {
+    const enabledCals = new Set(calendars.filter((c) => c.enabled).map((c) => c.id));
+    const list: any[] = [];
+    const filterText = (t: any) => !search || t.title.toLowerCase().includes(search) || (t.description ?? '').toLowerCase().includes(search);
+    for (const t of events) {
+      if (!enabledCals.has(t.calendarId) || t.hiddenOnCalendar) continue;
+      if (hideDone && (t.checked || t.stage === 'done')) continue;
+      if (!filterText(t)) continue;
+      if (!t.isEvent) {
+        const anchor = t.deadline || t.createdAt;
+        const anchorDate = anchor ? toLocalDateKey(new Date(anchor)) : undefined;
+        if (anchorDate) {
+          list.push({
+            id: t.id + ':task-due',
+            title: t.title,
+            start: anchorDate,
+            allDay: true,
+            editable: false,
+            extendedProps: {
+              kind: 'taskDue',
+              taskId: t.id,
+              category: normalizeCategory(t.category),
+              checked: t.checked,
+              stage: t.stage,
+              priority: t.priority,
+              hasDeadline: !!t.deadline,
+            },
+          });
+        }
+      }
+      const hasMultiRanges = Array.isArray(t.ranges) && t.ranges.length > 1;
+      const ranges = (t.ranges && t.ranges.length > 0) ? t.ranges : (t.start && t.end ? [{ id: 'primary', taskId: t.id, start: t.start, end: t.end, allDay: t.allDay }] as any[] : []);
+      for (const r of ranges) {
+        if (!r.start || !r.end) continue;
+        list.push({
+          id: `${t.id}:${r.id}`,
+          title: t.title,
+          start: r.start,
+          end: r.end,
+          allDay: !!r.allDay,
+          extendedProps: {
+            category: normalizeCategory(t.category),
+            taskId: t.id,
+            rangeId: String(r.id),
+            stage: t.stage,
+            checked: t.checked,
+            subTotal: Array.isArray(t.subTasks) ? t.subTasks.length : 0,
+            subDone: Array.isArray(t.subTasks) ? t.subTasks.filter((s) => s.done).length : 0,
+            hasMultiRanges,
+          },
+        });
+      }
+    }
+    const typesById = new Map(shiftTypes.map((type) => [type.id, type]));
+    for (const assignment of Object.values(shiftAssignments)) {
+      const type = typesById.get(assignment.shiftTypeId);
+      if (!type || !type.enabled || type.isOff) continue;
+      list.push(shiftAssignmentToCalendarEvent(assignment, type));
+    }
+    return list;
+  }, [events, calendars, search, hideDone, shiftTypes, shiftAssignments]);
+
+  return (
+    <div className="p-2 h-full overflow-hidden calendar-shell min-w-0 w-full min-h-[640px] relative rounded-2xl bg-transparent">
+      <FullCalendarAny
+        ref={calendarRef}
+        locale={koLocale}
+        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+        initialView="dayGridMonth"
+        views={{
+          timeGridFourDay: { type: 'timeGrid', duration: { days: 4 }, buttonText: '4일' },
+        }}
+        customButtons={{
+          shiftPlanner: { text: '근무 입력', click: () => openShiftManager(undefined, 'month') },
+        }}
+        buttonText={{
+          today: '오늘',
+          dayGridMonth: '월',
+          timeGridWeek: '주',
+          timeGridDay: '일',
+          timeGridFourDay: '4일',
+        }}
+        dayHeaderFormat={{ weekday: 'short' }}
+        dayHeaderContent={(arg: any) => {
+          try {
+            const d = arg.date as Date;
+            const wd = d.toLocaleDateString('ko-KR', { weekday: 'short' });
+            if (arg.view?.type === 'dayGridMonth') return wd;
+            const n = d.getDate();
+            const now = new Date();
+            const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+            return { html: '<span class="fc-dow">' + wd + '</span><span class="fc-date-badge ' + (isToday ? 'is-today' : '') + '">' + n + '</span>' } as any;
+          } catch {
+            return arg.text;
+          }
+        }}
+        headerToolbar={{ left: 'prev,next today', center: 'title', right: 'shiftPlanner dayGridMonth,timeGridWeek,timeGridDay' }}
+        height="100%"
+        expandRows={true}
+        dayMaxEventRows={4}
+        nowIndicator={true}
+        selectable={true}
+        selectMirror={true}
+        selectMinDistance={6}
+        slotLabelFormat={{ hour: 'numeric', hour12: true }}
+        eventTimeFormat={{ hour: 'numeric', minute: '2-digit', hour12: true }}
+        eventClassNames={(arg: any) => {
+          const ep: any = arg.event.extendedProps || {};
+          if (ep.kind === 'shift') return 'fc-event-minimal fc-shift-event category-hospital';
+          if (ep.kind === 'taskDue') return 'fc-event-minimal fc-task-due category-' + normalizeCategory(ep.category);
+          const key = ep.taskId || String(arg.event.id);
+          const base = creatingIds.current.has(key) ? 'fc-event-minimal fc-event-creating' : 'fc-event-minimal';
+          return `${base} category-${normalizeCategory(ep.category)}${ep.hasMultiRanges ? ' fc-event-has-multi' : ''}`;
+        }}
+        eventContent={(arg: any) => {
+          const ep: any = arg.event.extendedProps || {};
+          if (ep.kind === 'shift') {
+            const monthView = arg.view?.type === 'dayGridMonth';
+            return (
+              <div className="flex h-full w-full flex-col overflow-hidden">
+                <span className="font-semibold leading-tight">{ep.shiftCode}</span>
+                {!monthView && <span className="mt-1 text-xs leading-tight opacity-80">{ep.shiftTimeLabel}</span>}
+              </div>
+            );
+          }
+          if (ep.kind === 'taskDue') {
+            return <div className="fc-month-task-row"><span className="fc-month-task-check">{ep.checked ? '✓' : '□'}</span><span className={'fc-month-task-title ' + (ep.checked ? 'line-through opacity-60' : '')}>{arg.event.title}</span>{ep.priority === 'high' && <span className="fc-month-task-priority">!</span>}</div>;
+          }
+          const done = ep.subDone ?? 0;
+          const total = ep.subTotal ?? 0;
+          const strike = (ep.checked || ep.stage === 'done') ? 'line-through' : '';
+          const hasTime = !!arg.timeText;
+          if (arg.view?.type === 'dayGridMonth') {
+            return <div className="fc-month-event-row"><span className={'fc-month-event-title ' + strike}>{arg.event.title}</span></div>;
+          }
+          // Compact layout for short timed events (<= 30 minutes)
+          const start = arg.event.start as Date | null;
+          const end = arg.event.end as Date | null;
+          const durationMin = (!arg.event.allDay && start && end) ? Math.max(0, (end.getTime() - start.getTime()) / 60000) : 9999;
+          const compact = !arg.event.allDay && durationMin <= 30;
+          const showTime = hasTime && !compact;
+          if (compact) {
+            return (
+              <div className="flex items-center gap-1 text-xs leading-tight w-full">
+                <input aria-label={t("Mark done")} type="checkbox" className="checkbox-circle" checked={!!ep.checked} onChange={(e) => { e.stopPropagation(); toggleChecked(ep.taskId || String(arg.event.id).split(':')[0]); }} onClick={(e) => e.stopPropagation()} />
+                <span className={`truncate ${strike}`}>{arg.event.title}</span>
+                {total > 0 && <span className="fc-pill">{done}/{total}</span>}
+              </div>
+            );
+          }
+          return (
+            <div className="flex flex-col h-full w-full">
+              <div className="fc-event-body flex items-start gap-2 flex-1 min-h-0 overflow-hidden">
+                <input aria-label={t("Mark done")} type="checkbox" className="checkbox-circle" checked={!!ep.checked} onChange={(e) => { e.stopPropagation(); toggleChecked(ep.taskId || String(arg.event.id).split(':')[0]); }} onClick={(e) => e.stopPropagation()} />
+                <span className={`fc-event-title ${strike}`}>{arg.event.title}</span>
+                {total > 0 && <span className="fc-pill">{done}/{total}</span>}
+              </div>
+              {showTime && (
+                <div className="fc-event-footer mt-auto pt-1 text-xs text-slate-600 border-t border-slate-200 dark:text-slate-300 dark:border-slate-600/70">
+                  <span className="fc-event-time">{arg.timeText}</span>
+                </div>
+              )}
+            </div>
+          );
+        }}
+        datesSet={() => {
+          const api = calendarRef.current?.getApi?.();
+          if (!api) return;
+          const viewType = api.view?.type;
+          if (viewType === 'timeGridWeek' || viewType === 'timeGridDay') {
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            api.scrollToTime(`${hh}:${mm}:00`);
+          }
+        }}
+        editable
+        droppable
+        dateClick={(info: any) => {
+          try { window.dispatchEvent(new CustomEvent('calendar-date-selected', { detail: { date: info.dateStr.slice(0, 10) } })); } catch {}
+        }}
+        dayCellDidMount={(arg: any) => {
+          arg.el.ondblclick = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (target && (target.closest('.fc-event') || target.closest('.fc-daygrid-event'))) return;
+            event.preventDefault();
+            event.stopPropagation();
+            openQuickAdd('', { sheet: 'event', date: toLocalDateKey(arg.date as Date), direct: true });
+          };
+        }}
+        dayCellWillUnmount={(arg: any) => { arg.el.ondblclick = null; }}
+        select={(arg: any) => {
+          const date = toLocalDateKey(arg.start as Date);
+          openQuickAdd('', { sheet: 'event', date, direct: true });
+          try { calendarRef.current?.getApi?.().unselect?.(); } catch {}
+        }}
+        eventClick={(info: any) => {
+          try {
+            if (info.event.extendedProps?.kind === 'shift') {
+              openShiftManager(info.event.extendedProps.shiftDate, 'single');
+              info.jsEvent?.preventDefault();
+              info.jsEvent?.stopPropagation();
+              return;
+            }
+            const id: string = info.event.extendedProps?.taskId || String(info.event.id).split(':')[0];
+            const rangeId: string | undefined = info.event.extendedProps?.rangeId;
+            window.dispatchEvent(new CustomEvent('open-task-details', { detail: { id, rangeId } }));
+            info.jsEvent?.preventDefault();
+            info.jsEvent?.stopPropagation();
+          } catch {}
+        }}
+        eventDrop={async (info: any) => {
+          const ev: any = info.event;
+          if (ev.extendedProps?.kind === 'shift') { info.revert(); return; }
+          const oldEv: any = (info as any).oldEvent;
+          const start = ev.start as Date | null;
+          let end = ev.end as Date | null;
+          const allDay = ev.allDay as boolean;
+          // If moved from all-day to timed, default to 30 minutes duration
+          const movedFromAllDay = !!(oldEv && oldEv.allDay && !allDay);
+          if (movedFromAllDay && start) {
+            const dur = 30 * 60 * 1000; // 30 minutes
+            end = new Date(start.getTime() + dur);
+          }
+          const rangeId: string = ev.extendedProps?.rangeId;
+          const taskId: string = ev.extendedProps?.taskId || String(ev.id).split(':')[0];
+          if (rangeId && rangeId !== 'primary') {
+            await updateRange(rangeId, { start: start?.toISOString(), end: end?.toISOString(), allDay });
+          } else {
+            // Fallback single-range task: updating task will create/update its single range
+            await updateTask(taskId, { start: start?.toISOString(), end: end?.toISOString(), allDay });
+          }
+        }}
+        eventResize={async (info: any) => {
+          const ev: any = info.event;
+          if (ev.extendedProps?.kind === 'shift') { info.revert(); return; }
+          const rangeId: string = ev.extendedProps?.rangeId;
+          const taskId: string = ev.extendedProps?.taskId || String(ev.id).split(':')[0];
+          const startISO = ev.start?.toISOString();
+          const endISO = ev.end?.toISOString();
+          const allDay = ev.allDay as boolean;
+          if (rangeId && rangeId !== 'primary') {
+            await updateRange(rangeId, { start: startISO, end: endISO, allDay });
+          } else {
+            await updateTask(taskId, { start: startISO, end: endISO, allDay });
+          }
+        }}
+        eventDidMount={(info: any) => {
+          try {
+            // Native tooltip with time range + accessible label
+            const el = info.el as HTMLElement;
+            if (info.event.extendedProps?.kind === 'shift') {
+              const ep = info.event.extendedProps;
+              el.title = `${ep.shiftCode} ${ep.shiftName} • ${ep.shiftTimeLabel}`;
+              el.setAttribute('aria-label', `${ep.shiftDate} ${ep.shiftCode} ${ep.shiftName}, ${ep.shiftTimeLabel}`);
+              return;
+            }
+            const s = info.event.start;
+            const e = info.event.end;
+            if (s && e) {
+              const opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' };
+              const range = `${s.toLocaleString('ko-KR', opts)} – ${e.toLocaleString('ko-KR', opts)}`;
+              el.title = `${messages.categories[normalizeCategory(info.event.extendedProps.category)]} • ${range}`;
+              try { el.setAttribute('aria-label', `${info.event.title}, ${messages.categories[normalizeCategory(info.event.extendedProps.category)]}: ${range}`); } catch {}
+            }
+          } catch {}
+        }}
+        drop={async (info: any) => {
+          const id = (info.draggedEl as HTMLElement).getAttribute('data-id')!;
+          const start = info.date as Date;
+          const end = new Date(start.getTime() + 60 * 60 * 1000);
+          await addRange(id, { start: start.toISOString(), end: end.toISOString(), allDay: info.allDay ?? false });
+        }}
+        events={calendarEvents}
+      />
+    </div>
+  );
+}
+
+function useEvents() {
+  const tasks = useStore((s) => s.tasks);
+  return useMemo(() => Object.values(tasks), [tasks]);
+}
+
+function colorFromStage(stage?: string): string {
+  switch (stage) {
+    case 'todo': return '#eab308'; // yellow-500
+    case 'done': return '#22c55e'; // green-500
+    default: return '#94a3b8'; // slate-400
+  }
+}
+
+function uiFromStage(stage?: string): { bg: string; border: string } {
+  const dark = isDark();
+  if (!dark) {
+    switch (stage) {
+      case 'todo':
+        return { bg: '#fefce8', border: '#fef08a' }; // yellow-50 bg, yellow-200 border
+      case 'done':
+        return { bg: '#f0fdf4', border: '#bbf7d0' }; // green-50 bg, green-200 border
+      default:
+        return { bg: 'rgba(255,255,255,0.94)', border: '#e5e7eb' }; // neutral
+    }
+  } else {
+    switch (stage) {
+      case 'todo':
+        return { bg: 'rgba(253, 224, 71, 0.10)', border: '#f59e0b' }; // yellow tint
+      case 'done':
+        return { bg: 'rgba(34, 197, 94, 0.12)', border: '#86efac' }; // green tint
+      default:
+        return { bg: 'rgba(255,255,255,0.06)', border: '#475569' }; // neutral
+    }
+  }
+}
+
+function isDark(): boolean {
+  if (typeof document === 'undefined') return false;
+  try { return document.documentElement.classList.contains('dark'); } catch { return false; }
+}
