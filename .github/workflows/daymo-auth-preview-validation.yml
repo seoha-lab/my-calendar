@@ -48,3 +48,30 @@ jobs:
             sleep 1
           done
           node tests/auth-preview-smoke.cjs
+
+      - name: Verify live Vercel Preview routes
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const origin = 'https://daymo-auth-preview.vercel.app';
+          (async () => {
+            for (const [route, expected] of [
+              ['/login', '이메일 로그인'],
+              ['/account', '로그인 상태'],
+              ['/', 'Daymo 계정 로그인 테스트'],
+            ]) {
+              const response = await fetch(origin + route, { signal: AbortSignal.timeout(15000) });
+              assert.equal(response.status, 200, `Preview ${route} HTTP ${response.status}`);
+              const html = await response.text();
+              assert.ok(html.includes(expected), `Preview ${route} did not contain ${expected}`);
+              console.log(`PASS deployed Preview ${route} HTTP 200`);
+            }
+            const callback = await fetch(origin + '/auth/callback?next=https://evil.invalid', {
+              redirect: 'manual', signal: AbortSignal.timeout(15000),
+            });
+            const location = callback.headers.get('location') || '';
+            assert.ok(callback.status === 307 || callback.status === 302);
+            assert.ok(location.startsWith(origin + '/login?error='), 'callback should only redirect within own origin');
+            console.log('PASS callback rejects missing code and external redirect');
+          })().catch(e => {console.error(e); process.exitCode = 1;});
+          NODE
