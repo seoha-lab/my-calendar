@@ -1,0 +1,84 @@
+name: Daymo Auth Preview Validation
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - app/**
+      - src/**
+      - package.json
+      - package-lock.json
+      - next.config.mjs
+      - vercel.json
+      - .github/workflows/daymo-auth-preview-validation.yml
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests
+        run: npm test
+      - name: Next.js production build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_DAYMO_AUTH_TEST_MODE: 'true'
+          NEXT_PUBLIC_SUPABASE_URL: 'https://qglwymsqskagoobpvcna.supabase.co'
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_dummy_compile_only'
+      - name: Install browser test runner
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Browser auth flow smoke (mock Auth API)
+        env:
+          NEXT_PUBLIC_DAYMO_AUTH_TEST_MODE: 'true'
+          NEXT_PUBLIC_SUPABASE_URL: 'https://qglwymsqskagoobpvcna.supabase.co'
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_dummy_compile_only'
+        run: |
+          npm run start -- -p 3001 >/tmp/daymo-test-server.log 2>&1 &
+          for n in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:3001/login >/dev/null && break
+            sleep 1
+          done
+          node tests/auth-preview-smoke.cjs
+
+      - name: Verify live Vercel Preview routes
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const origin = 'https://daymo-auth-preview.vercel.app';
+          (async () => {
+            for (const [route, expected] of [
+              ['/login', '이메일 로그인'],
+              ['/account', '로그인 상태'],
+              ['/', 'Daymo 계정 로그인 테스트'],
+            ]) {
+              const response = await fetch(origin + route, { signal: AbortSignal.timeout(15000) });
+              assert.equal(response.status, 200, `Preview ${route} HTTP ${response.status}`);
+              const html = await response.text();
+              const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || 'no-title';
+              console.log(`LIVE PREVIEW ${route} title=${title} content-type=${response.headers.get('content-type')} sample=${html.slice(0,180).replace(/\s+/g,' ')}`);
+              if (title === 'Login – Vercel' || title === 'Login - Vercel') {
+                console.log('PASS Vercel Preview access protection is active; external browser tests require authorized Vercel session');
+                console.log('SKIP unauthenticated live route content checks. This does not verify real email signup.');
+                return;
+              }
+              assert.ok(html.includes(expected), `Preview ${route} did not contain ${expected} (title=${title})`);
+              console.log(`PASS deployed Preview ${route} HTTP 200`);
+            }
+            const callback = await fetch(origin + '/auth/callback?next=https://evil.invalid', {
+              redirect: 'manual', signal: AbortSignal.timeout(15000),
+            });
+            const location = callback.headers.get('location') || '';
+            assert.ok(callback.status === 307 || callback.status === 302);
+            assert.ok(location.startsWith(origin + '/login?error='), 'callback should only redirect within own origin');
+            console.log('PASS callback rejects missing code and external redirect');
+          })().catch(e => {console.error(e); process.exitCode = 1;});
+          NODE

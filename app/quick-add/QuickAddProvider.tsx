@@ -10,8 +10,16 @@ import { setupSWClient } from '@/lib/sw-client';
 import { toast } from '@/lib/toast';
 import { registerQuickAddOpen } from '@/lib/quickAdd';
 import AutoScheduleModal from '@/components/AutoScheduleModal';
+import AuthPreviewGate from '@/components/AuthPreviewGate';
 
 export default function QuickAddProvider({ children }: { children: React.ReactNode }) {
+  if (process.env.NEXT_PUBLIC_DAYMO_AUTH_TEST_MODE === 'true') {
+    return <AuthPreviewGate>{children}</AuthPreviewGate>;
+  }
+  return <LegacyQuickAddProvider>{children}</LegacyQuickAddProvider>;
+}
+
+function LegacyQuickAddProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [initialText, setInitialText] = useState('');
   const [initialMode, setInitialMode] = useState<'quick'|'notes'>('quick');
