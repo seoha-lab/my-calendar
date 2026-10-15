@@ -63,7 +63,9 @@ jobs:
               const response = await fetch(origin + route, { signal: AbortSignal.timeout(15000) });
               assert.equal(response.status, 200, `Preview ${route} HTTP ${response.status}`);
               const html = await response.text();
-              assert.ok(html.includes(expected), `Preview ${route} did not contain ${expected}`);
+              const title = html.match(/<title[^>]*>([^<]*)<\\/title>/i)?.[1] || 'no-title';
+              console.log(`LIVE PREVIEW ${route} title=${title} content-type=${response.headers.get('content-type')} sample=${html.slice(0,180).replace(/\\s+/g,' ')}`);
+              assert.ok(html.includes(expected), `Preview ${route} did not contain ${expected} (title=${title})`);
               console.log(`PASS deployed Preview ${route} HTTP 200`);
             }
             const callback = await fetch(origin + '/auth/callback?next=https://evil.invalid', {
