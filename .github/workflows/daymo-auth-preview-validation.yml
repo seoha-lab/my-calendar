@@ -32,3 +32,19 @@ jobs:
           NEXT_PUBLIC_DAYMO_AUTH_TEST_MODE: 'true'
           NEXT_PUBLIC_SUPABASE_URL: 'https://qglwymsqskagoobpvcna.supabase.co'
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_dummy_compile_only'
+      - name: Install browser test runner
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: Browser auth flow smoke (mock Auth API)
+        env:
+          NEXT_PUBLIC_DAYMO_AUTH_TEST_MODE: 'true'
+          NEXT_PUBLIC_SUPABASE_URL: 'https://qglwymsqskagoobpvcna.supabase.co'
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_dummy_compile_only'
+        run: |
+          npm run start -- -p 3001 >/tmp/daymo-test-server.log 2>&1 &
+          for n in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:3001/login >/dev/null && break
+            sleep 1
+          done
+          node tests/auth-preview-smoke.cjs
