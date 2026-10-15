@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 type Mode = 'login' | 'signup' | 'recovery';
@@ -18,7 +18,6 @@ function explainError(message: string): string {
 
 export default function LoginPage() {
   const router = useRouter();
-  const params = useSearchParams();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,13 +26,13 @@ export default function LoginPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (params.get('error')) setError('인증 링크가 유효하지 않거나 만료되었습니다. 다시 요청해 주세요.');
+    if (new URLSearchParams(window.location.search).has('error')) setError('인증 링크가 유효하지 않거나 만료되었습니다. 다시 요청해 주세요.');
     const client = getSupabaseBrowserClient();
     if (!client) return;
     void client.auth.getUser().then(({ data: { user } }) => {
       if (user) router.replace('/account');
     }).catch(() => {});
-  }, [params, router]);
+  }, [router]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -76,7 +75,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-md px-4 py-12 sm:py-20" aria-label="Daymo 계정 인증">
+    <section className="mx-auto w-full max-w-md px-4 py-12 sm:py-20" aria-label="Daymo 계정 인증">
       <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8">
         <p className="text-sm font-semibold text-blue-600">Daymo · 로그인 파일럿</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
@@ -115,6 +114,6 @@ export default function LoginPage() {
           <Link className="text-gray-500 underline" href="/">파일럿 안내</Link>
         </div>
       </div>
-    </main>
+    </section>
   );
 }
