@@ -11,6 +11,6 @@ export const useCalendarTheme = create<State>((set) => ({
   selectTheme: (id) => {
     const themeId = getCalendarTheme(id).id;
     set({ themeId });
-    try { localStorage.setItem(CALENDAR_THEME_STORAGE_KEY, themeId); return true; } catch { return false; }
+    try { localStorage.setItem(CALENDAR_THEME_STORAGE_KEY, themeId); localStorage.setItem('daymo:preferences-updated-at', new Date().toISOString()); return true; } catch { return false; }
   },
 }));

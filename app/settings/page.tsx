@@ -1,7 +1,7 @@
 'use client';
 import { t, interpolate } from '@/lib/i18n';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import CalendarThemeSettings from '@/components/CalendarThemeSettings';
 import CategorySettings from '@/components/CategorySettings';
 import ShiftSettings from '@/components/ShiftSettings';
@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast';
 import { isGoogleEnabled } from '@/lib/google';
 import { AI_MODEL_OPTIONS, DEFAULT_MODEL_ID, LS_AI_KEY, getStoredAIModel, setStoredAIModel } from '@/lib/ai';
 import { Bot, Key, Database, Upload, Download, CalendarDays, Plug, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import CloudSyncSettings from '@/components/CloudSyncSettings';
 
 export default function SettingsPage() {
   const [exportOpen, setExportOpen] = useState(false);
@@ -100,6 +101,7 @@ export default function SettingsPage() {
         <CategorySettings />
         <ShiftSettings />
         <FreeTimeSettings />
+        <CloudSyncSettings />
         {/* AI Assistant */}
         <section className="card p-4 space-y-3">
           <div>
@@ -192,11 +194,6 @@ export default function SettingsPage() {
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
     </div>
   );
-}
-
-function useRef<T>(initial: T | null) {
-  const [ref] = useState({ current: initial } as { current: T | null });
-  return ref;
 }
 
 function parseBool(val: string | undefined): boolean | undefined {

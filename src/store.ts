@@ -94,8 +94,8 @@ export const useStore = create<State & Actions>((set, get) => ({
 
   setSearch: (q) => set({ search: q }),
 
-  setHideDone: (v) => { set({ hideDone: v }); try { localStorage.setItem('clarity:hide-done', v ? '1' : '0'); } catch {} },
-  toggleHideDone: () => { const v = !get().hideDone; set({ hideDone: v }); try { localStorage.setItem('clarity:hide-done', v ? '1' : '0'); } catch {} },
+  setHideDone: (v) => { set({ hideDone: v }); try { localStorage.setItem('clarity:hide-done', v ? '1' : '0'); localStorage.setItem('daymo:preferences-updated-at', new Date().toISOString()); } catch {} },
+  toggleHideDone: () => { const v = !get().hideDone; set({ hideDone: v }); try { localStorage.setItem('clarity:hide-done', v ? '1' : '0'); localStorage.setItem('daymo:preferences-updated-at', new Date().toISOString()); } catch {} },
 
   createTask: async (input) => {
     const task = await calendarService.createTask(input);

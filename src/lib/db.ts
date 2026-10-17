@@ -4,8 +4,10 @@
 import { normalizeCategory } from '@/lib/calendar/categories';
 import { Task, CalendarSource, Stage, TaskRange, ShiftAssignment, ShiftType } from '@/types';
 import type { ShiftAssignmentInput, ShiftTypeInput } from '@/lib/shifts/ShiftProvider';
+import type { LocalSyncSnapshot, SyncOutboxEntry } from '@/lib/sync/types';
 
 type WorkerMsg =
+  | { id: string; type: 'useDatabase'; databaseKey: string }
   | { id: string; type: 'init' }
   | { id: string; type: 'migrate' }
   | { id: string; type: 'run'; sql: string; params?: unknown[] }
@@ -18,6 +20,7 @@ type WorkerResp<T = unknown> =
 
 let worker: Worker | null = null;
 let ready = false;
+let activeDatabaseKey = 'legacy';
 
 function getWorker(): Worker {
   if (!worker) {
@@ -62,6 +65,8 @@ async function ensureReady() {
     }
   }
 }
+
+type Statement = { sql: string; params?: unknown[] };
 
 // Utilities to marshal Task rows
 function rowToTask(row: any): Task {
@@ -151,6 +156,18 @@ function validateShiftTypeTimes(startTime: string | null, endTime: string | null
 }
 
 export const db = {
+  async selectDatabase(databaseKey: string): Promise<void> {
+    const normalized = databaseKey === 'legacy' ? 'legacy' : databaseKey.replace(/[^a-zA-Z0-9-]/g, '');
+    if (!normalized) throw new Error('유효하지 않은 로컬 데이터베이스 키입니다.');
+    if (ready && activeDatabaseKey === normalized) return;
+    await call({ id: crypto.randomUUID(), type: 'useDatabase', databaseKey: normalized });
+    activeDatabaseKey = normalized;
+    ready = false;
+    await ensureReady();
+  },
+
+  getDatabaseKey(): string { return activeDatabaseKey; },
+
   async createTask(task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
     await ensureReady();
     const now = new Date().toISOString();
@@ -317,7 +334,7 @@ export const db = {
 
   async toggleCalendarEnabled(id: string, enabled: boolean): Promise<void> {
     await ensureReady();
-    await call({ id: crypto.randomUUID(), type: 'run', sql: 'UPDATE calendars SET enabled = ? WHERE id = ?', params: [enabled ? 1 : 0, id] });
+    await call({ id: crypto.randomUUID(), type: 'run', sql: 'UPDATE calendars SET enabled = ?, updatedAt = ? WHERE id = ?', params: [enabled ? 1 : 0, new Date().toISOString(), id] });
   },
   
   // --- Ranges (timeline) ---
@@ -429,8 +446,8 @@ export const db = {
     await call({
       id: crypto.randomUUID(),
       type: 'run',
-      sql: 'INSERT INTO shift_types(id,code,name,startTime,endTime,crossesMidnight,isOff,enabled,sortOrder) VALUES (?,?,?,?,?,?,?,?,?)',
-      params: [id, code, name, startTime, endTime, input.crossesMidnight ? 1 : 0, isOff ? 1 : 0, input.enabled === false ? 0 : 1, sortOrder],
+      sql: 'INSERT INTO shift_types(id,code,name,startTime,endTime,crossesMidnight,isOff,enabled,sortOrder,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      params: [id, code, name, startTime, endTime, input.crossesMidnight ? 1 : 0, isOff ? 1 : 0, input.enabled === false ? 0 : 1, sortOrder, new Date().toISOString()],
     });
     const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_types WHERE id = ?', params: [id] });
     return rowToShiftType(rows[0]);
@@ -462,8 +479,8 @@ export const db = {
     await call({
       id: crypto.randomUUID(),
       type: 'run',
-      sql: 'UPDATE shift_types SET code=?, name=?, startTime=?, endTime=?, crossesMidnight=?, isOff=?, enabled=?, sortOrder=? WHERE id=?',
-      params: [next.code, next.name, next.startTime, next.endTime, next.crossesMidnight ? 1 : 0, next.isOff ? 1 : 0, next.enabled ? 1 : 0, next.sortOrder, id],
+      sql: 'UPDATE shift_types SET code=?, name=?, startTime=?, endTime=?, crossesMidnight=?, isOff=?, enabled=?, sortOrder=?, updatedAt=? WHERE id=?',
+      params: [next.code, next.name, next.startTime, next.endTime, next.crossesMidnight ? 1 : 0, next.isOff ? 1 : 0, next.enabled ? 1 : 0, next.sortOrder, new Date().toISOString(), id],
     });
     const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_types WHERE id = ?', params: [id] });
     return rowToShiftType(rows[0]);
@@ -550,5 +567,76 @@ export const db = {
   async deleteShiftAssignment(date: string): Promise<void> {
     await ensureReady();
     await call({ id: crypto.randomUUID(), type: 'run', sql: 'DELETE FROM shift_assignments WHERE date = ?', params: [date] });
+  },
+
+  async exportSyncSnapshot(): Promise<LocalSyncSnapshot> {
+    await ensureReady();
+    const [calendars, tasks, taskRanges, shiftTypes, shiftAssignments] = await Promise.all([
+      call<Record<string, unknown>[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM calendars ORDER BY id', params: [] }),
+      call<Record<string, unknown>[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM tasks ORDER BY createdAt,id', params: [] }),
+      call<Record<string, unknown>[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM task_ranges ORDER BY createdAt,id', params: [] }),
+      call<Record<string, unknown>[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_types ORDER BY sortOrder,id', params: [] }),
+      call<Record<string, unknown>[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM shift_assignments ORDER BY date,id', params: [] }),
+    ]);
+    return { calendars, tasks, taskRanges, shiftTypes, shiftAssignments };
+  },
+
+  async listSyncOutbox(): Promise<SyncOutboxEntry[]> {
+    await ensureReady();
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM sync_outbox ORDER BY changedAt, entityType, entityId', params: [] });
+    return rows.map((row) => ({
+      entityType: row.entityType, entityId: String(row.entityId), action: row.action,
+      changedAt: String(row.changedAt), operationId: String(row.operationId),
+      attempts: Number(row.attempts || 0), lastError: row.lastError ?? undefined,
+    }));
+  },
+
+  async runSyncStatements(statements: Statement[], applyingRemote = false): Promise<void> {
+    await ensureReady();
+    if (!statements.length) return;
+    const wrapped = applyingRemote
+      ? [{ sql: 'UPDATE sync_control SET applyingRemote = 1 WHERE id = 1' }, ...statements, { sql: 'UPDATE sync_control SET applyingRemote = 0 WHERE id = 1' }]
+      : statements;
+    try {
+      await call({ id: crypto.randomUUID(), type: 'batch', statements: wrapped });
+    } catch (error) {
+      if (applyingRemote) {
+        try { await call({ id: crypto.randomUUID(), type: 'run', sql: 'UPDATE sync_control SET applyingRemote = 0 WHERE id = 1' }); } catch {}
+      }
+      throw error;
+    }
+  },
+
+  async removeSyncOutbox(entries: Pick<SyncOutboxEntry, 'entityType' | 'entityId' | 'operationId'>[]): Promise<void> {
+    await this.runSyncStatements(entries.map((entry) => ({
+      sql: 'DELETE FROM sync_outbox WHERE entityType = ? AND entityId = ? AND operationId = ?',
+      params: [entry.entityType, entry.entityId, entry.operationId],
+    })), true);
+  },
+
+  async markSyncOutboxFailed(entries: Pick<SyncOutboxEntry, 'entityType' | 'entityId'>[], message: string): Promise<void> {
+    await this.runSyncStatements(entries.map((entry) => ({
+      sql: 'UPDATE sync_outbox SET attempts = attempts + 1, lastError = ? WHERE entityType = ? AND entityId = ?',
+      params: [message.slice(0, 500), entry.entityType, entry.entityId],
+    })), true);
+  },
+
+  async getSyncState(key: string): Promise<string | undefined> {
+    await ensureReady();
+    const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT value FROM sync_state WHERE key = ?', params: [key] });
+    return rows[0]?.value == null ? undefined : String(rows[0].value);
+  },
+
+  async setSyncState(key: string, value: string): Promise<void> {
+    await this.runSyncStatements([{ sql: 'INSERT INTO sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', params: [key, value] }], true);
+  },
+
+  async saveLocalBackup(input: { id: string; createdAt: string; reason: string; checksum: string; payload: string }): Promise<void> {
+    await this.runSyncStatements([{ sql: 'INSERT INTO sync_backups(id,createdAt,reason,checksum,payload) VALUES(?,?,?,?,?)', params: [input.id, input.createdAt, input.reason, input.checksum, input.payload] }], true);
+  },
+
+  async listLocalBackups(): Promise<{ id: string; createdAt: string; reason: string; checksum: string; payload: string }[]> {
+    await ensureReady();
+    return await call({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM sync_backups ORDER BY createdAt DESC LIMIT 10', params: [] });
   },
 };

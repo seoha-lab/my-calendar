@@ -24,5 +24,6 @@ export function setFreeTimePreferences(value: FreeTimePreferences): void {
   const error = validateFreeTimePreferences(value);
   if (error) throw new Error(error);
   localStorage.setItem(FREE_TIME_PREFERENCES_KEY, JSON.stringify(value));
+  localStorage.setItem('daymo:preferences-updated-at', new Date().toISOString());
   window.dispatchEvent(new CustomEvent(FREE_TIME_PREFERENCES_EVENT, { detail: value }));
 }

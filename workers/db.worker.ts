@@ -2,6 +2,7 @@
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 
 type Message =
+  | { id: string; type: 'useDatabase'; databaseKey: string }
   | { id: string; type: 'init' }
   | { id: string; type: 'migrate' }
   | { id: string; type: 'run'; sql: string; params?: unknown[] }
@@ -14,6 +15,12 @@ type Response =
 
 let db: any = null;
 let sqlite3: any = null;
+let databaseKey = 'legacy';
+
+function databasePath(key: string) {
+  const safe = key === 'legacy' ? 'main' : `user-${key.replace(/[^a-zA-Z0-9-]/g, '')}`;
+  return `/clarity/${safe}.sqlite3`;
+}
 
 async function ensureDB() {
   if (db) return db;
@@ -21,10 +28,10 @@ async function ensureDB() {
     sqlite3 = await sqlite3InitModule({});
   }
   try {
-    db = new sqlite3.oo1.OpfsDb('/clarity/main.sqlite3');
+    db = new sqlite3.oo1.OpfsDb(databasePath(databaseKey));
   } catch (e) {
     // Fallback to transient db if OPFS unavailable
-    db = new sqlite3.oo1.DB('/clarity/main.sqlite3', 'ct');
+    db = new sqlite3.oo1.DB(databasePath(databaseKey), 'ct');
   }
   return db;
 }
@@ -36,7 +43,8 @@ CREATE TABLE IF NOT EXISTS calendars (
   title TEXT NOT NULL,
   enabled INTEGER NOT NULL DEFAULT 1,
   kind TEXT NOT NULL CHECK(kind IN ('local','google')),
-  readOnly INTEGER NOT NULL DEFAULT 0
+  readOnly INTEGER NOT NULL DEFAULT 0,
+  updatedAt TEXT
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -93,6 +101,7 @@ CREATE TABLE IF NOT EXISTS shift_types (
   isOff INTEGER NOT NULL DEFAULT 0,
   enabled INTEGER NOT NULL DEFAULT 1,
   sortOrder INTEGER NOT NULL DEFAULT 0,
+  updatedAt TEXT,
   CHECK (
     (isOff = 1 AND startTime IS NULL AND endTime IS NULL)
     OR
@@ -120,7 +129,74 @@ VALUES
   ('shift-d7','D7','데이(12시간)','06:30','18:30',0,0,1,10),
   ('shift-n7','N7','나이트(12시간)','18:30','06:30',1,0,1,20),
   ('shift-off','OFF','오프',NULL,NULL,0,1,1,30);
+
+CREATE TABLE IF NOT EXISTS sync_outbox (
+  entityType TEXT NOT NULL,
+  entityId TEXT NOT NULL,
+  action TEXT NOT NULL CHECK(action IN ('upsert','delete')),
+  changedAt TEXT NOT NULL,
+  operationId TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  lastError TEXT,
+  PRIMARY KEY(entityType, entityId)
+);
+CREATE INDEX IF NOT EXISTS idx_sync_outbox_changed ON sync_outbox(changedAt);
+
+CREATE TABLE IF NOT EXISTS sync_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sync_backups (
+  id TEXT PRIMARY KEY,
+  createdAt TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  checksum TEXT NOT NULL,
+  payload TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sync_backups_created ON sync_backups(createdAt DESC);
+
+CREATE TABLE IF NOT EXISTS sync_control (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  applyingRemote INTEGER NOT NULL DEFAULT 0
+);
+INSERT OR IGNORE INTO sync_control(id, applyingRemote) VALUES(1, 0);
 `;
+}
+
+function createSyncTriggers(dbi: any) {
+  const specs = [
+    ['calendars', 'calendar'], ['tasks', 'task'], ['task_ranges', 'task_range'],
+    ['shift_types', 'shift_type'], ['shift_assignments', 'shift_assignment'],
+  ] as const;
+  for (const [table, entity] of specs) {
+    const updated = table === 'tasks' || table === 'task_ranges' || table === 'shift_assignments'
+      ? "COALESCE(NEW.updatedAt, strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+      : "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+    dbi.exec(`
+      CREATE TRIGGER IF NOT EXISTS sync_${table}_insert AFTER INSERT ON ${table}
+      WHEN (SELECT applyingRemote FROM sync_control WHERE id = 1) = 0
+      BEGIN
+        INSERT INTO sync_outbox(entityType,entityId,action,changedAt,operationId)
+        VALUES('${entity}',NEW.id,'upsert',${updated},lower(hex(randomblob(16))))
+        ON CONFLICT(entityType,entityId) DO UPDATE SET action='upsert',changedAt=excluded.changedAt,operationId=excluded.operationId,attempts=0,lastError=NULL;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_${table}_update AFTER UPDATE ON ${table}
+      WHEN (SELECT applyingRemote FROM sync_control WHERE id = 1) = 0
+      BEGIN
+        INSERT INTO sync_outbox(entityType,entityId,action,changedAt,operationId)
+        VALUES('${entity}',NEW.id,'upsert',${updated},lower(hex(randomblob(16))))
+        ON CONFLICT(entityType,entityId) DO UPDATE SET action='upsert',changedAt=excluded.changedAt,operationId=excluded.operationId,attempts=0,lastError=NULL;
+      END;
+      CREATE TRIGGER IF NOT EXISTS sync_${table}_delete AFTER DELETE ON ${table}
+      WHEN (SELECT applyingRemote FROM sync_control WHERE id = 1) = 0
+      BEGIN
+        INSERT INTO sync_outbox(entityType,entityId,action,changedAt,operationId)
+        VALUES('${entity}',OLD.id,'delete',strftime('%Y-%m-%dT%H:%M:%fZ','now'),lower(hex(randomblob(16))))
+        ON CONFLICT(entityType,entityId) DO UPDATE SET action='delete',changedAt=excluded.changedAt,operationId=excluded.operationId,attempts=0,lastError=NULL;
+      END;
+    `);
+  }
 }
 
 self.onmessage = async (e: MessageEvent<Message>) => {
@@ -128,6 +204,16 @@ self.onmessage = async (e: MessageEvent<Message>) => {
   const send = (res: Response) => (self as unknown as Worker).postMessage(res);
   try {
     switch (msg.type) {
+      case 'useDatabase': {
+        if (db) {
+          try { db.close(); } catch {}
+          db = null;
+        }
+        databaseKey = msg.databaseKey || 'legacy';
+        await ensureDB();
+        send({ id: msg.id, ok: true });
+        break;
+      }
       case 'init': {
         await ensureDB();
         send({ id: msg.id, ok: true });
@@ -200,6 +286,13 @@ SELECT id,title,description,${hasLocation ? 'location' : 'NULL'},${hasDeadline ?
         // Ensure index exists when no rebuild was needed and column already present
         try { dbi.exec('CREATE INDEX IF NOT EXISTS idx_tasks_completedAt ON tasks(completedAt);'); } catch {}
 
+        const calendarColumns = dbi.exec({ sql: 'PRAGMA table_info(calendars);', returnValue: 'resultRows', rowMode: 'object' }) as { name: string }[];
+        if (!calendarColumns.some((column) => column.name === 'updatedAt')) dbi.exec('ALTER TABLE calendars ADD COLUMN updatedAt TEXT;');
+        const shiftTypeColumns = dbi.exec({ sql: 'PRAGMA table_info(shift_types);', returnValue: 'resultRows', rowMode: 'object' }) as { name: string }[];
+        if (!shiftTypeColumns.some((column) => column.name === 'updatedAt')) dbi.exec('ALTER TABLE shift_types ADD COLUMN updatedAt TEXT;');
+        dbi.exec("UPDATE calendars SET updatedAt = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE updatedAt IS NULL;");
+        dbi.exec("UPDATE shift_types SET updatedAt = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE updatedAt IS NULL;");
+
         // Phase 2: additive, repeatable category migration. Never reset existing data.
         const categoryColumns = dbi.exec({ sql: 'PRAGMA table_info(tasks);', returnValue: 'resultRows', rowMode: 'object' }) as { name: string }[];
         if (!categoryColumns.some((column) => column.name === 'category')) {
@@ -247,6 +340,7 @@ SELECT id,title,description,${hasLocation ? 'location' : 'NULL'},${hasDeadline ?
         } catch (_) {
           try { dbi.exec('ROLLBACK;'); } catch {}
         }
+        createSyncTriggers(dbi);
         send({ id: msg.id, ok: true });
         break;
       }

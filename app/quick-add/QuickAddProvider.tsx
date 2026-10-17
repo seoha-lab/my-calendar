@@ -10,13 +10,10 @@ import { setupSWClient } from '@/lib/sw-client';
 import { toast } from '@/lib/toast';
 import { registerQuickAddOpen } from '@/lib/quickAdd';
 import AutoScheduleModal from '@/components/AutoScheduleModal';
-import AuthPreviewGate from '@/components/AuthPreviewGate';
+import CloudSyncBoundary from '@/components/CloudSyncBoundary';
 
 export default function QuickAddProvider({ children }: { children: React.ReactNode }) {
-  if (process.env.NEXT_PUBLIC_DAYMO_AUTH_TEST_MODE === 'true') {
-    return <AuthPreviewGate>{children}</AuthPreviewGate>;
-  }
-  return <LegacyQuickAddProvider>{children}</LegacyQuickAddProvider>;
+  return <CloudSyncBoundary><LegacyQuickAddProvider>{children}</LegacyQuickAddProvider></CloudSyncBoundary>;
 }
 
 function LegacyQuickAddProvider({ children }: { children: React.ReactNode }) {

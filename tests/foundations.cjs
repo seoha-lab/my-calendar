@@ -346,7 +346,48 @@ async function main() {
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_assignments',returnValue:'resultRows',rowMode:'object'})[0].n,1);
   sqlDB.exec({sql:'DELETE FROM shift_assignments WHERE date = ?',bind:['2026-10-01']});
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_assignments',returnValue:'resultRows',rowMode:'object'})[0].n,0);
+  const syncTables=sqlDB.exec({sql:"SELECT name FROM sqlite_master WHERE type='table' AND name IN ('sync_outbox','sync_state','sync_backups','sync_control')",returnValue:'resultRows',rowMode:'object'}).map(row=>row.name).sort();
+  assert.deepEqual(syncTables,['sync_backups','sync_control','sync_outbox','sync_state']);
+  // Migration remains repeatable and never removes the legacy task/range.
+  sqlDB.exec(schema);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM tasks',returnValue:'resultRows',rowMode:'object'})[0].n,1);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM task_ranges',returnValue:'resultRows',rowMode:'object'})[0].n,1);
   sqlDB.close();
+  const { compareVersions, shouldApplyRemote, reconcileReplicas }=load('src/lib/sync/merge.ts');
+  assert.equal(compareVersions({updatedAt:'2026-10-17T10:00:00Z'},{updatedAt:'2026-10-17T09:00:00Z'}),'local');
+  assert.equal(compareVersions({updatedAt:'2026-10-17T10:00:00Z'},{updatedAt:'2026-10-17T10:00:00Z',deletedAt:'2026-10-17T10:00:00Z'}),'remote');
+  assert.equal(shouldApplyRemote('2026-10-17T11:00:00Z','2026-10-17T09:00:00Z','2026-10-17T10:00:00Z'),true);
+  assert.equal(shouldApplyRemote('2026-10-17T09:00:00Z','2026-10-17T08:00:00Z','2026-10-17T10:00:00Z'),false);
+  const migrated=reconcileReplicas([{id:'legacy',updatedAt:'2026-10-17T09:00:00Z',value:'보존된 일정'}],[]);
+  assert.equal(migrated[0].value,'보존된 일정');
+  const deviceB=reconcileReplicas([],migrated);
+  assert.equal(deviceB.length,1); assert.equal(deviceB[0].id,'legacy');
+  const noDuplicate=reconcileReplicas(deviceB,[{id:'legacy',updatedAt:'2026-10-17T09:00:00Z',value:'보존된 일정'}]);
+  assert.equal(noDuplicate.length,1);
+  const conflict=reconcileReplicas([{id:'shared',updatedAt:'2026-10-17T10:00:00Z',value:'PC'}],[{id:'shared',updatedAt:'2026-10-17T11:00:00Z',value:'휴대폰'}]);
+  assert.equal(conflict[0].value,'휴대폰');
+  const deleted=reconcileReplicas([{id:'deleted',updatedAt:'2026-10-17T10:00:00Z',value:'old'}],[{id:'deleted',updatedAt:'2026-10-17T11:00:00Z',deletedAt:'2026-10-17T11:00:00Z'}]);
+  assert.ok(deleted[0].deletedAt);
+  const syncMigrationSource=fs.readFileSync(path.join(root,'supabase/migrations/20261017000100_enable_daymo_realtime.sql'),'utf8');
+  assert.match(syncMigrationSource,/pg_publication_tables/);
+  assert.match(syncMigrationSource,/supabase_realtime/);
+  const cloudSchemaSource=fs.readFileSync(path.join(root,'supabase/migrations/20261014000100_initial_user_cloud_schema.sql'),'utf8');
+  assert.match(cloudSchemaSource,/revoke all[\s\S]*from anon/);
+  assert.match(cloudSchemaSource,/using \(user_id = \(select auth\.uid\(\)\)\)/);
+  const validBackup={format:'daymo-backup',version:1,createdAt:'2026-10-17T00:00:00Z',databaseKey:'legacy',data:{calendars:[],tasks:[],taskRanges:[],shiftTypes:[],shiftAssignments:[]},categories:[],preferences:{}};
+  const backupModule=load('src/lib/sync/backup.ts',{
+    '@/lib/db':{db:{}},
+    './preferences':{applySyncedCategories(){},applySyncedPreferences(){},readSyncedCategories(){return [];},readSyncedPreferences(){return {};}}
+  });
+  assert.equal(backupModule.validateBackup(validBackup).version,1);
+  assert.throws(()=>backupModule.validateBackup({...validBackup,data:{...validBackup.data,tasks:null}}),/tasks/);
+  const localModule=load('src/lib/sync/local.ts',{'@/lib/db':{db:{}}});
+  const mapped=localModule.mapLocalRowToRemote('task',{id:'same-id',calendarId:'local',title:'동기화',stage:'todo',checked:0,linkedTo:'[]',subTasks:'[]',createdAt:'2026-10-17T00:00:00Z',updatedAt:'2026-10-17T01:00:00Z'},'user-a');
+  assert.deepEqual({user_id:mapped.user_id,id:mapped.id,updated_at:mapped.updated_at},{user_id:'user-a',id:'same-id',updated_at:'2026-10-17T01:00:00Z'});
+  assert.equal(localModule.localEntityMap({calendars:[],tasks:[{id:'same-id'}],taskRanges:[],shiftTypes:[],shiftAssignments:[]}).task.size,1);
+  assert.match(workerSource,/user-\$\{key\.replace/);
+  assert.match(workerSource,/\['tasks', 'task'\]/);
+  assert.match(workerSource,/CREATE TRIGGER IF NOT EXISTS sync_\$\{table\}_insert/);
   const quickAddSource=fs.readFileSync(path.join(root,'src/components/QuickAdd.tsx'),'utf8');
   assert.ok(quickAddSource.includes('Tab · 직접 입력'));
   assert.ok(quickAddSource.includes('할 일 이름'));

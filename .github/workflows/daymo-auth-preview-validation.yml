@@ -6,6 +6,9 @@ on:
     paths:
       - app/**
       - src/**
+      - workers/**
+      - supabase/migrations/**
+      - tests/**
       - package.json
       - package-lock.json
       - next.config.mjs
@@ -58,7 +61,7 @@ jobs:
             for (const [route, expected] of [
               ['/login', '이메일 로그인'],
               ['/account', '로그인 상태'],
-              ['/', 'Daymo 계정 로그인 테스트'],
+              ['/', '개인 데이터를 안전하게 준비하고 있습니다'],
             ]) {
               const response = await fetch(origin + route, { signal: AbortSignal.timeout(15000) });
               assert.equal(response.status, 200, `Preview ${route} HTTP ${response.status}`);

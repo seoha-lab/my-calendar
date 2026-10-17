@@ -17,6 +17,8 @@ type Preferences = {
   labels: Partial<Record<DefaultEventCategory, string>>;
   colors: Partial<Record<DefaultEventCategory, string>>;
   customCategories: CustomCategory[];
+  updatedAt?: string;
+  categoryTimestamps?: Record<string, string>;
 };
 type CategoryPreferencesState = Preferences & {
   hydrate: () => void;
@@ -60,10 +62,21 @@ function cleanPreferences(value: unknown): Preferences {
       id: candidate.id, label: normalizeName(candidate.label), color: candidate.color,
     });
   }
-  return { labels, colors, customCategories };
+  const categoryTimestamps: Record<string, string> = {};
+  if (raw.categoryTimestamps && typeof raw.categoryTimestamps === 'object') {
+    for (const [id, timestamp] of Object.entries(raw.categoryTimestamps as Record<string, unknown>)) {
+      if (typeof timestamp === 'string' && !Number.isNaN(Date.parse(timestamp))) categoryTimestamps[id] = timestamp;
+    }
+  }
+  return { labels, colors, customCategories, updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : undefined, categoryTimestamps };
 }
-function savePreferences(preferences: Preferences): void {
-  try { localStorage.setItem(CATEGORY_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences)); } catch {}
+function savePreferences(preferences: Preferences, changedIds: string[]): void {
+  try {
+    const now = new Date().toISOString();
+    const categoryTimestamps = { ...preferences.categoryTimestamps };
+    for (const id of changedIds) categoryTimestamps[id] = now;
+    localStorage.setItem(CATEGORY_PREFERENCES_STORAGE_KEY, JSON.stringify({ ...preferences, categoryTimestamps, updatedAt: now }));
+  } catch {}
 }
 export function getSuggestedCategoryColor(usedColors: string[]): string {
   const used = new Set(usedColors.map((color) => color.toLowerCase()));
@@ -87,13 +100,13 @@ export const useCategoryPreferences = create<CategoryPreferencesState>((set, get
     const nextLabel = normalizeName(label);
     if (nextLabel) labels[category] = nextLabel;
     else delete labels[category];
-    savePreferences({ labels, colors: state.colors, customCategories: state.customCategories });
+    savePreferences(stateWith(state, { labels }), [category]);
     return { labels };
   }),
   setColor: (category, color) => set((state) => {
     if (!isDefaultCategory(category) || !VALID_HEX_COLOR.test(color)) return state;
     const colors = { ...state.colors, [category]: color };
-    savePreferences({ labels: state.labels, colors, customCategories: state.customCategories });
+    savePreferences(stateWith(state, { colors }), [category]);
     return { colors };
   }),
   addCustomCategory: (label, color) => {
@@ -110,7 +123,7 @@ export const useCategoryPreferences = create<CategoryPreferencesState>((set, get
     };
     set((state) => {
       const customCategories = [...state.customCategories, category];
-      savePreferences({ labels: state.labels, colors: state.colors, customCategories });
+      savePreferences(stateWith(state, { customCategories }), [category.id]);
       return { customCategories };
     });
     return category;
@@ -128,13 +141,17 @@ export const useCategoryPreferences = create<CategoryPreferencesState>((set, get
     }
     set((state) => {
       const customCategories = state.customCategories.map((item) => item.id === id ? { ...item, label, color } : item);
-      savePreferences({ labels: state.labels, colors: state.colors, customCategories });
+      savePreferences(stateWith(state, { customCategories }), [id]);
       return { customCategories };
     });
   },
   // Reset only the original eight presets; never silently delete user-created categories.
   reset: () => set((state) => {
-    savePreferences({ labels: {}, colors: {}, customCategories: state.customCategories });
+    savePreferences(stateWith(state, { labels: {}, colors: {} }), [...EVENT_CATEGORIES]);
     return { labels: {}, colors: {} };
   }),
 }));
+
+function stateWith(state: Preferences, patch: Partial<Preferences>): Preferences {
+  return { ...state, ...patch };
+}

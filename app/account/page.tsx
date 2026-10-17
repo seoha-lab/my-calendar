@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
+import { useCloudSync } from '@/lib/sync/state';
 
 type State = 'loading' | 'ready' | 'failed';
 
@@ -15,6 +16,7 @@ export default function AccountPage() {
   const [profileCheck, setProfileCheck] = useState<'loading' | 'passed' | 'failed'>('loading');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const cloud = useCloudSync();
 
   useEffect(() => {
     let active = true;
@@ -69,10 +71,13 @@ export default function AccountPage() {
                profileCheck === 'passed' ? '로그인 및 본인 프로필 읽기 확인 완료' :
                '개인 프로필 DB 조회 실패 · 추가 보안 점검 필요'}
             </p>
-            <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-              현재는 로그인 테스트 전용입니다. 기존 일정·근무표는 아직 클라우드로 이전되지 않았으며,
-              두 기기 동기화도 비활성화 상태입니다.
-            </p>
+            <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-950 dark:bg-slate-800 dark:text-white">
+              <strong>클라우드 동기화:</strong>{' '}
+              {cloud.status === 'synced' ? '완료' : cloud.status === 'syncing' ? '진행 중' : cloud.status === 'offline' ? '오프라인 변경 보관 중' : cloud.status === 'error' ? '확인 필요' : '준비 중'}
+              {cloud.pending > 0 && <span> · 전송 대기 {cloud.pending}건</span>}
+              {cloud.error && <p role="alert" className="mt-2 text-red-600">{cloud.error}</p>}
+            </div>
+            <button type="button" className="btn min-h-11 w-full" onClick={() => window.dispatchEvent(new Event('daymo-sync-request'))} disabled={cloud.status === 'syncing'}>지금 동기화</button>
             <button disabled={busy} onClick={() => void signOut()} type="button" className="btn btn-primary min-h-11 w-full">
               {busy ? '로그아웃 중…' : '로그아웃'}
             </button>

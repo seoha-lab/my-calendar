@@ -32,6 +32,7 @@ export function applyTheme(next: Theme | 'toggle') {
   }
 
   try { localStorage.setItem(STORAGE_KEY, target); } catch {}
+  try { localStorage.setItem('daymo:preferences-updated-at', new Date().toISOString()); } catch {}
 
   const effective = resolveTheme(target);
   document.documentElement.classList.toggle('dark', effective === 'dark');
