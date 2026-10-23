@@ -25,6 +25,11 @@ export interface Task {
   linkedTo?: string[];      // bidirectional links
   parentId?: string | null; // original task if follow-up
   subTasks?: SubTask[];
+  externalUid?: string;     // Stable UID from an imported external calendar event.
+  recurrenceId?: string;    // Stable occurrence identifier; empty for a non-recurring import.
+  importSource?: 'apple-ics';
+  sourceCalendar?: string;
+  recurrenceRule?: string;
   // Multiple scheduled ranges for timeline (optional; falls back to start/end)
   ranges?: TaskRange[];
   createdAt: string;        // ISO

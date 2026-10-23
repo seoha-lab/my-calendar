@@ -14,9 +14,11 @@ import { isGoogleEnabled } from '@/lib/google';
 import { AI_MODEL_OPTIONS, DEFAULT_MODEL_ID, LS_AI_KEY, getStoredAIModel, setStoredAIModel } from '@/lib/ai';
 import { Bot, Key, Database, Upload, Download, CalendarDays, Plug, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import CloudSyncSettings from '@/components/CloudSyncSettings';
+import IcsImportModal from '@/components/IcsImportModal';
 
 export default function SettingsPage() {
   const [exportOpen, setExportOpen] = useState(false);
+  const [icsImportOpen, setIcsImportOpen] = useState(false);
   const createTask = useStore((s) => s.createTask);
   const refresh = useStore((s) => s.refresh);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -167,12 +169,13 @@ export default function SettingsPage() {
         <section className="card p-4 space-y-3">
           <div>
             <h2 className="font-medium flex items-center gap-2"><Database className="w-4 h-4 text-gray-500" /> {t("Data")}</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300">{t("Export a backup or import tasks from CSV.")}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300">데이터를 내보내거나 CSV 및 Apple Calendar ICS 파일을 가져옵니다.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button className="btn" onClick={() => setExportOpen(true)}><Download className="w-4 h-4" /> {t("Export…")}</button>
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onImport} />
             <button className="btn" onClick={() => fileRef.current?.click()}><Upload className="w-4 h-4" /> {t("Import CSV…")}</button>
+            <button className="btn" onClick={() => setIcsImportOpen(true)}><CalendarDays className="w-4 h-4" /> ICS 가져오기</button>
           </div>
           <p className="text-xs text-gray-500">{t("CSV must include a &quot;title&quot; column. Other columns are optional.")}</p>
         </section>
@@ -192,6 +195,7 @@ export default function SettingsPage() {
       </div>
 
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
+      <IcsImportModal open={icsImportOpen} onClose={() => setIcsImportOpen(false)} />
     </div>
   );
 }

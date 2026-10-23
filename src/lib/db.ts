@@ -5,6 +5,7 @@ import { normalizeCategory } from '@/lib/calendar/categories';
 import { Task, CalendarSource, Stage, TaskRange, ShiftAssignment, ShiftType } from '@/types';
 import type { ShiftAssignmentInput, ShiftTypeInput } from '@/lib/shifts/ShiftProvider';
 import type { LocalSyncSnapshot, SyncOutboxEntry } from '@/lib/sync/types';
+import type { IcsImportEventInput } from '@/lib/ics/types';
 
 type WorkerMsg =
   | { id: string; type: 'useDatabase'; databaseKey: string }
@@ -60,13 +61,20 @@ async function ensureReady() {
     const hasCompletedAt = Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === 'completedAt');
     const hasLocation = Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === 'location');
     const hasScheduling = ['deadline', 'estimatedMinutes', 'priority'].every((name) => Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === name));
-    if (!hasCompletedAt || !hasLocation || !hasScheduling || shiftTables.length !== 2) {
+    const hasImportMetadata = ['externalUid', 'recurrenceId', 'importSource', 'sourceCalendar', 'recurrenceRule'].every((name) => Array.isArray(cols) && cols.some((r: any) => String(r.name || '') === name));
+    if (!hasCompletedAt || !hasLocation || !hasScheduling || !hasImportMetadata || shiftTables.length !== 2) {
       await call({ id: crypto.randomUUID(), type: 'migrate' });
     }
   }
 }
 
 type Statement = { sql: string; params?: unknown[] };
+
+async function stableImportId(prefix: string, key: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${prefix}-${hex.slice(0, 32)}`;
+}
 
 // Utilities to marshal Task rows
 function rowToTask(row: any): Task {
@@ -90,6 +98,11 @@ function rowToTask(row: any): Task {
     linkedTo: row.linkedTo ? JSON.parse(row.linkedTo) : undefined,
     parentId: row.parentId ?? undefined,
     subTasks: row.subTasks ? JSON.parse(row.subTasks) : undefined,
+    externalUid: row.externalUid ?? undefined,
+    recurrenceId: row.recurrenceId ?? undefined,
+    importSource: row.importSource === 'apple-ics' ? 'apple-ics' : undefined,
+    sourceCalendar: row.sourceCalendar ?? undefined,
+    recurrenceRule: row.recurrenceRule ?? undefined,
     createdAt: String(row.createdAt),
     updatedAt: String(row.updatedAt),
     calendarId: String(row.calendarId),
@@ -330,6 +343,45 @@ export const db = {
     await ensureReady();
     const rows = await call<any[]>({ id: crypto.randomUUID(), type: 'all', sql: 'SELECT * FROM calendars ORDER BY id', params: [] });
     return rows.map((r) => ({ id: String(r.id), title: String(r.title), enabled: !!r.enabled, readOnly: !!r.readOnly, kind: r.kind as CalendarSource['kind'] }));
+  },
+
+  async listImportedEventKeys(importSource = 'apple-ics'): Promise<string[]> {
+    await ensureReady();
+    const rows = await call<any[]>({
+      id: crypto.randomUUID(), type: 'all',
+      sql: "SELECT externalUid, COALESCE(recurrenceId,'') AS recurrenceId FROM tasks WHERE importSource = ? AND externalUid IS NOT NULL",
+      params: [importSource],
+    });
+    return rows.map((row) => `${String(row.externalUid)}\u001f${String(row.recurrenceId)}`);
+  },
+
+  async importIcsEvents(calendar: CalendarSource, events: IcsImportEventInput[]): Promise<{ created: number; skipped: number }> {
+    await ensureReady();
+    if (!events.length) return { created: 0, skipped: 0 };
+    const existing = new Set(await this.listImportedEventKeys('apple-ics'));
+    const unique = events.filter((event, index, all) => !existing.has(event.key) && all.findIndex((candidate) => candidate.key === event.key) === index);
+    const now = new Date().toISOString();
+    const statements: Statement[] = [{
+      sql: 'INSERT OR IGNORE INTO calendars(id,title,enabled,kind,readOnly,updatedAt) VALUES(?,?,?,?,?,?)',
+      params: [calendar.id, calendar.title, calendar.enabled ? 1 : 0, calendar.kind, calendar.readOnly ? 1 : 0, now],
+    }];
+    for (const event of unique) {
+      // The same Apple occurrence receives the same ids on every device. This
+      // prevents two offline devices from creating separate cloud records.
+      const taskId = await stableImportId('ics', event.key);
+      const rangeId = await stableImportId('ics-range', event.key);
+      statements.push({
+        sql: `INSERT OR IGNORE INTO tasks(id,title,description,location,stage,checked,start,end,allDay,isEvent,hiddenOnCalendar,linkedTo,parentId,subTasks,externalUid,recurrenceId,importSource,sourceCalendar,recurrenceRule,createdAt,updatedAt,calendarId,sortOrder,category)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        params: [taskId,event.title,event.description ?? null,event.location ?? null,'todo',0,event.start,event.end,event.allDay ? 1 : 0,1,0,'[]',null,'[]',event.uid,event.recurrenceId,'apple-ics',event.sourceCalendar,event.recurrenceRule ?? null,now,now,event.calendarId,0,event.category],
+      });
+      statements.push({
+        sql: 'INSERT INTO task_ranges(id,taskId,start,end,allDay,createdAt,updatedAt) SELECT ?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM tasks WHERE id = ?)',
+        params: [rangeId,taskId,event.start,event.end,event.allDay ? 1 : 0,now,now,taskId],
+      });
+    }
+    await call({ id: crypto.randomUUID(), type: 'batch', statements });
+    return { created: unique.length, skipped: events.length - unique.length };
   },
 
   async toggleCalendarEnabled(id: string, enabled: boolean): Promise<void> {

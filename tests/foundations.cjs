@@ -314,6 +314,21 @@ async function main() {
   assert.match(buildCSV([{...task,category:'research'}]), /calendarId,category/);
   assert.match(buildCSV([{...task,category:'research'}]), /local,research/);
   assert.match(buildICS({events:[{...task,category:'research'}],todos:[]}), /CATEGORIES:research/);
+  const { parseAppleIcs } = load('src/lib/ics/parser.ts',{'ical.js':{__esModule:true,default:require('ical.js')}});
+  const appleIcs = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Apple Inc.//macOS 14.0//EN\r\nX-WR-CALNAME:개인 일정\r\nX-APPLE-CALENDAR-COLOR:#FF9500FF\r\nBEGIN:VEVENT\r\nUID:seoul-time@example.com\r\nDTSTART;TZID=Asia/Seoul:20261023T090000\r\nDTEND;TZID=Asia/Seoul:20261023T103000\r\nSUMMARY:학교 회의\r\nDESCRIPTION:회의 설명\r\nLOCATION:서울 캠퍼스\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:year-boundary@example.com\r\nDTSTART;VALUE=DATE:20261231\r\nDTEND;VALUE=DATE:20270102\r\nSUMMARY:연말 휴가\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:weekly@example.com\r\nDTSTART;TZID=Asia/Seoul:20261001T090000\r\nDTEND;TZID=Asia/Seoul:20261001T100000\r\nRRULE:FREQ=WEEKLY;COUNT=4\r\nEXDATE;TZID=Asia/Seoul:20261008T090000\r\nSUMMARY:주간 회의\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:weekly@example.com\r\nRECURRENCE-ID;TZID=Asia/Seoul:20261015T090000\r\nDTSTART;TZID=Asia/Seoul:20261015T110000\r\nDTEND;TZID=Asia/Seoul:20261015T123000\r\nSUMMARY:변경된 주간 회의\r\nLOCATION:회의실 B\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:weekly@example.com\r\nRECURRENCE-ID;TZID=Asia/Seoul:20261022T090000\r\nDTSTART;TZID=Asia/Seoul:20261022T090000\r\nDTEND;TZID=Asia/Seoul:20261022T100000\r\nSTATUS:CANCELLED\r\nSUMMARY:취소된 주간 회의\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;
+  const parsedIcs = parseAppleIcs(appleIcs,{recurringFrom:'2026-09-01',recurringTo:'2027-01-31',defaultTimeZone:'Asia/Seoul'});
+  assert.equal(parsedIcs.calendar.name,'개인 일정'); assert.equal(parsedIcs.calendar.color,'#FF9500');
+  const seoulEvent=parsedIcs.events.find(event=>event.uid==='seoul-time@example.com');
+  assert.equal(seoulEvent.start,'2026-10-23T00:00:00.000Z'); assert.equal(seoulEvent.end,'2026-10-23T01:30:00.000Z');
+  assert.equal(seoulEvent.recurrenceId,'','a standalone event is deduplicated by UID even if its time later changes');
+  assert.equal(seoulEvent.description,'회의 설명'); assert.equal(seoulEvent.location,'서울 캠퍼스');
+  const allDayEvent=parsedIcs.events.find(event=>event.uid==='year-boundary@example.com');
+  assert.equal(allDayEvent.allDay,true); assert.equal(allDayEvent.start,'2026-12-30T15:00:00.000Z'); assert.equal(allDayEvent.end,'2027-01-01T15:00:00.000Z');
+  const weeklyEvents=parsedIcs.events.filter(event=>event.uid==='weekly@example.com');
+  assert.equal(weeklyEvents.length,2,'EXDATE and cancelled RECURRENCE-ID remove occurrences while a moved exception remains');
+  assert.ok(weeklyEvents.some(event=>event.title==='변경된 주간 회의' && event.start==='2026-10-15T02:00:00.000Z' && event.location==='회의실 B'));
+  assert.ok(weeklyEvents.every(event=>event.recurrenceRule.includes('RRULE') && event.recurrenceRule.includes('EXDATE')));
+  assert.equal(new Set(parsedIcs.events.map(event=>event.key)).size,parsedIcs.events.length,'UID and recurrence id make every preview row stable');
   const nextConfigSource=fs.readFileSync(path.join(root,'next.config.mjs'),'utf8');
   assert.match(nextConfigSource,/\{ url: "\/today", revision: shellRevision \}/);
   // Execute the actual worker migration SQL in SQLite WASM, including old records/ranges.
@@ -325,6 +340,7 @@ async function main() {
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_types',returnValue:'resultRows',rowMode:'object'})[0].n,7);
   const schedulingColumns=sqlDB.exec({sql:'PRAGMA table_info(tasks)',returnValue:'resultRows',rowMode:'object'}).map(column=>column.name);
   assert.ok(['deadline','estimatedMinutes','priority'].every(column=>schedulingColumns.includes(column)));
+  assert.ok(['externalUid','recurrenceId','importSource','sourceCalendar','recurrenceRule'].every(column=>schedulingColumns.includes(column)));
   sqlDB.exec({sql:'INSERT INTO tasks(id,title,stage,checked,createdAt,updatedAt,calendarId) VALUES (?,?,?,?,?,?,?)',bind:['legacy','기존 일정','todo',0,'2026-09-27','2026-09-27','local']});
   sqlDB.exec({sql:'UPDATE tasks SET location = ? WHERE id = ?',bind:['학교','legacy']});
   sqlDB.exec({sql:'INSERT INTO task_ranges(id,taskId,start,end,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',bind:['range','legacy',task.start,task.end,'2026-09-27','2026-09-27']});
@@ -335,12 +351,15 @@ async function main() {
   }
   assert.deepEqual(sqlDB.exec({sql:'SELECT title, category, priority FROM tasks',returnValue:'resultRows',rowMode:'object'}).map(row => ({...row})),[{title:'기존 일정',category:'other',priority:'medium'}]);
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM task_ranges',returnValue:'resultRows',rowMode:'object'})[0].n,1);
+  sqlDB.exec({sql:'INSERT INTO tasks(id,title,stage,checked,createdAt,updatedAt,calendarId,externalUid,recurrenceId,importSource) VALUES (?,?,?,?,?,?,?,?,?,?)',bind:['ics-one','가져온 일정','todo',0,'now','now','local','apple-uid','2026-10-23T00:00:00.000Z','apple-ics']});
+  sqlDB.exec({sql:'INSERT OR IGNORE INTO tasks(id,title,stage,checked,createdAt,updatedAt,calendarId,externalUid,recurrenceId,importSource) VALUES (?,?,?,?,?,?,?,?,?,?)',bind:['ics-two','중복 일정','todo',0,'now','now','local','apple-uid','2026-10-23T00:00:00.000Z','apple-ics']});
+  assert.equal(sqlDB.exec({sql:"SELECT COUNT(*) AS n FROM tasks WHERE importSource='apple-ics'",returnValue:'resultRows',rowMode:'object'})[0].n,1);
   sqlDB.exec({sql:'INSERT INTO shift_assignments(id,date,shiftTypeId,createdAt,updatedAt) VALUES (?,?,?,?,?)',bind:['assignment','2026-10-01',d7.id,'now','now']});
   sqlDB.exec({sql:`INSERT INTO shift_assignments(id,date,shiftTypeId,createdAt,updatedAt) VALUES (?,?,?,?,?)
     ON CONFLICT(date) DO UPDATE SET shiftTypeId = excluded.shiftTypeId, updatedAt = excluded.updatedAt`,bind:['replacement','2026-10-01',n7.id,'later','later']});
   assert.equal(sqlDB.exec({sql:'SELECT shiftTypeId FROM shift_assignments WHERE date = ?',bind:['2026-10-01'],returnValue:'resultRows',rowMode:'object'})[0].shiftTypeId,n7.id);
   sqlDB.exec(schema);
-  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM tasks',returnValue:'resultRows',rowMode:'object'})[0].n,1);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM tasks',returnValue:'resultRows',rowMode:'object'})[0].n,2);
   assert.equal(sqlDB.exec({sql:'SELECT location FROM tasks WHERE id = ?',bind:['legacy'],returnValue:'resultRows',rowMode:'object'})[0].location,'학교');
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM task_ranges',returnValue:'resultRows',rowMode:'object'})[0].n,1);
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM shift_assignments',returnValue:'resultRows',rowMode:'object'})[0].n,1);
@@ -350,7 +369,7 @@ async function main() {
   assert.deepEqual(syncTables,['sync_backups','sync_control','sync_outbox','sync_state']);
   // Migration remains repeatable and never removes the legacy task/range.
   sqlDB.exec(schema);
-  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM tasks',returnValue:'resultRows',rowMode:'object'})[0].n,1);
+  assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM tasks',returnValue:'resultRows',rowMode:'object'})[0].n,2);
   assert.equal(sqlDB.exec({sql:'SELECT COUNT(*) AS n FROM task_ranges',returnValue:'resultRows',rowMode:'object'})[0].n,1);
   sqlDB.close();
   const { compareVersions, shouldApplyRemote, reconcileReplicas }=load('src/lib/sync/merge.ts');
@@ -374,6 +393,10 @@ async function main() {
   const cloudSchemaSource=fs.readFileSync(path.join(root,'supabase/migrations/20261014000100_initial_user_cloud_schema.sql'),'utf8');
   assert.match(cloudSchemaSource,/revoke all[\s\S]*from anon/);
   assert.match(cloudSchemaSource,/using \(user_id = \(select auth\.uid\(\)\)\)/);
+  const icsCloudMigration=fs.readFileSync(path.join(root,'supabase/migrations/20261023140947_apple_ics_import_metadata.sql'),'utf8');
+  assert.match(icsCloudMigration,/add column if not exists external_uid/);
+  assert.match(icsCloudMigration,/user_id,[\s\S]*import_source,[\s\S]*external_uid/);
+  assert.match(icsCloudMigration,/deleted_at is null/);
   const validBackup={format:'daymo-backup',version:1,createdAt:'2026-10-17T00:00:00Z',databaseKey:'legacy',data:{calendars:[],tasks:[],taskRanges:[],shiftTypes:[],shiftAssignments:[]},categories:[],preferences:{}};
   const backupModule=load('src/lib/sync/backup.ts',{
     '@/lib/db':{db:{}},
@@ -382,8 +405,9 @@ async function main() {
   assert.equal(backupModule.validateBackup(validBackup).version,1);
   assert.throws(()=>backupModule.validateBackup({...validBackup,data:{...validBackup.data,tasks:null}}),/tasks/);
   const localModule=load('src/lib/sync/local.ts',{'@/lib/db':{db:{}}});
-  const mapped=localModule.mapLocalRowToRemote('task',{id:'same-id',calendarId:'local',title:'동기화',stage:'todo',checked:0,linkedTo:'[]',subTasks:'[]',createdAt:'2026-10-17T00:00:00Z',updatedAt:'2026-10-17T01:00:00Z'},'user-a');
+  const mapped=localModule.mapLocalRowToRemote('task',{id:'same-id',calendarId:'local',title:'동기화',stage:'todo',checked:0,linkedTo:'[]',subTasks:'[]',externalUid:'apple-uid',recurrenceId:'occurrence',importSource:'apple-ics',sourceCalendar:'개인 일정',recurrenceRule:'RRULE:FREQ=WEEKLY',createdAt:'2026-10-17T00:00:00Z',updatedAt:'2026-10-17T01:00:00Z'},'user-a');
   assert.deepEqual({user_id:mapped.user_id,id:mapped.id,updated_at:mapped.updated_at},{user_id:'user-a',id:'same-id',updated_at:'2026-10-17T01:00:00Z'});
+  assert.deepEqual({external_uid:mapped.external_uid,recurrence_id:mapped.recurrence_id,import_source:mapped.import_source,source_calendar:mapped.source_calendar},{external_uid:'apple-uid',recurrence_id:'occurrence',import_source:'apple-ics',source_calendar:'개인 일정'});
   assert.equal(localModule.localEntityMap({calendars:[],tasks:[{id:'same-id'}],taskRanges:[],shiftTypes:[],shiftAssignments:[]}).task.size,1);
   assert.match(workerSource,/user-\$\{key\.replace/);
   assert.match(workerSource,/\['tasks', 'task'\]/);
