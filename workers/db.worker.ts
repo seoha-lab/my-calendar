@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   linkedTo TEXT,
   parentId TEXT,
   subTasks TEXT,
+  externalUid TEXT,
+  recurrenceId TEXT,
+  importSource TEXT,
+  sourceCalendar TEXT,
+  recurrenceRule TEXT,
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
   calendarId TEXT NOT NULL REFERENCES calendars(id) ON DELETE CASCADE,
@@ -75,6 +80,9 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(stage);
 CREATE INDEX IF NOT EXISTS idx_tasks_calendar ON tasks(calendarId);
 CREATE INDEX IF NOT EXISTS idx_tasks_time ON tasks(start, end);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_external_occurrence
+  ON tasks(importSource, externalUid, COALESCE(recurrenceId, ''))
+  WHERE importSource IS NOT NULL AND externalUid IS NOT NULL;
 
 INSERT OR IGNORE INTO calendars(id,title,enabled,kind,readOnly)
 VALUES ('local','Local Tasks',1,'local',0);
@@ -310,6 +318,15 @@ SELECT id,title,description,${hasLocation ? 'location' : 'NULL'},${hasDeadline ?
         if (!schedulingColumns.some((column) => column.name === 'deadline')) dbi.exec('ALTER TABLE tasks ADD COLUMN deadline TEXT;');
         if (!schedulingColumns.some((column) => column.name === 'estimatedMinutes')) dbi.exec('ALTER TABLE tasks ADD COLUMN estimatedMinutes INTEGER;');
         if (!schedulingColumns.some((column) => column.name === 'priority')) dbi.exec("ALTER TABLE tasks ADD COLUMN priority TEXT CHECK(priority IN ('high','medium','low')) DEFAULT 'medium';");
+
+        // Apple Calendar one-time import metadata. Additive and safe for legacy rows.
+        const importColumns = dbi.exec({ sql: 'PRAGMA table_info(tasks);', returnValue: 'resultRows', rowMode: 'object' }) as { name: string }[];
+        if (!importColumns.some((column) => column.name === 'externalUid')) dbi.exec('ALTER TABLE tasks ADD COLUMN externalUid TEXT;');
+        if (!importColumns.some((column) => column.name === 'recurrenceId')) dbi.exec('ALTER TABLE tasks ADD COLUMN recurrenceId TEXT;');
+        if (!importColumns.some((column) => column.name === 'importSource')) dbi.exec('ALTER TABLE tasks ADD COLUMN importSource TEXT;');
+        if (!importColumns.some((column) => column.name === 'sourceCalendar')) dbi.exec('ALTER TABLE tasks ADD COLUMN sourceCalendar TEXT;');
+        if (!importColumns.some((column) => column.name === 'recurrenceRule')) dbi.exec('ALTER TABLE tasks ADD COLUMN recurrenceRule TEXT;');
+        dbi.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_external_occurrence ON tasks(importSource,externalUid,COALESCE(recurrenceId,'')) WHERE importSource IS NOT NULL AND externalUid IS NOT NULL;");
 
         // Backfill: for any task with start/end but no task_ranges rows, create one
         try {

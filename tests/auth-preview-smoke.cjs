@@ -129,6 +129,38 @@ async function run() {
     assert.ok(cloud.tasks.some(item=>item.title==='PC에서 만든 동기화 테스트'),`settings=${await page.locator('body').innerText()} writes=${JSON.stringify(restWrites)}`);
     console.log('PASS first device uploads an offline-first task without duplicates');
 
+    const appleIcs=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Apple Inc.//macOS 14.0//EN\r\nX-WR-CALNAME:Apple 개인\r\nX-APPLE-CALENDAR-COLOR:#FF9500FF\r\nBEGIN:VEVENT\r\nUID:preview-import-1@example.com\r\nDTSTART;TZID=Asia/Seoul:20261023T090000\r\nDTEND;TZID=Asia/Seoul:20261023T103000\r\nSUMMARY:Apple 테스트 회의\r\nDESCRIPTION:보존할 설명\r\nLOCATION:서울 캠퍼스\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:preview-import-2@example.com\r\nDTSTART;VALUE=DATE:20261024\r\nDTEND;VALUE=DATE:20261025\r\nSUMMARY:선택하지 않을 종일 일정\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;
+    await page.getByRole('button',{name:'ICS 가져오기'}).click();
+    const icsChooserPromise=page.waitForEvent('filechooser');
+    await page.getByRole('button',{name:'.ics 파일 선택'}).click();
+    const icsChooser=await icsChooserPromise;
+    await icsChooser.setFiles({name:'apple-calendar.ics',mimeType:'text/calendar',buffer:Buffer.from(appleIcs)});
+    await page.getByText('Apple 테스트 회의',{exact:true}).waitFor();
+    await page.getByLabel('선택하지 않을 종일 일정 가져오기').uncheck();
+    assert.equal(await page.getByRole('button',{name:/선택한 1개 가져오기/}).isEnabled(),true);
+    const importBackupPromise=page.waitForEvent('download');
+    await page.getByRole('button',{name:/선택한 1개 가져오기/}).click();
+    await importBackupPromise;
+    await page.getByText(/Apple Calendar 일정 1개를 가져왔습니다/).waitFor({timeout:15000});
+    for(let attempt=0;attempt<100 && !cloud.tasks.some(item=>item.external_uid==='preview-import-1@example.com');attempt++) {
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    const imported=cloud.tasks.find(item=>item.external_uid==='preview-import-1@example.com');
+    assert.ok(imported,'selected ICS event is synchronized to Supabase');
+    assert.match(imported.id,/^ics-[0-9a-f]{32}$/,'the same occurrence has a deterministic cross-device id');
+    assert.equal(imported.location,'서울 캠퍼스'); assert.equal(imported.description,'보존할 설명'); assert.equal(imported.import_source,'apple-ics');
+    assert.ok(cloud.task_ranges.some(item=>item.task_id===imported.id && /^ics-range-[0-9a-f]{32}$/.test(item.id)),'the synchronized calendar range is deterministic too');
+    assert.equal(cloud.tasks.some(item=>item.external_uid==='preview-import-2@example.com'),false,'unselected ICS event is not stored');
+    await page.getByRole('button',{name:'ICS 가져오기 닫기'}).click();
+    await page.getByRole('button',{name:'ICS 가져오기'}).click();
+    const duplicateChooserPromise=page.waitForEvent('filechooser');
+    await page.getByRole('button',{name:'.ics 파일 선택'}).click();
+    await (await duplicateChooserPromise).setFiles({name:'apple-calendar.ics',mimeType:'text/calendar',buffer:Buffer.from(appleIcs)});
+    await page.getByText('이미 가져옴',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Apple 테스트 회의 가져오기').isDisabled(),true);
+    await page.getByRole('button',{name:'ICS 가져오기 닫기'}).click();
+    console.log('PASS ICS preview, selected-only import, backup, UID deduplication and cloud sync');
+
     const downloadPromise=page.waitForEvent('download');
     await page.getByRole('button',{name:/백업 다운로드/}).click();
     const download=await downloadPromise;
@@ -155,11 +187,21 @@ async function run() {
     await phone.getByRole('button',{name:'로그인',exact:true}).last().click();
     await phone.waitForURL('**/account',{timeout:15000});
     await phone.goto(ORIGIN+'/',{waitUntil:'networkidle'});
+    await phone.getByText('Apple 테스트 회의',{exact:true}).first().waitFor({timeout:15000});
+    await phone.goto(ORIGIN+'/settings',{waitUntil:'networkidle'});
+    await phone.getByRole('button',{name:'ICS 가져오기'}).click();
+    const phoneIcsChooserPromise=phone.waitForEvent('filechooser');
+    await phone.getByRole('button',{name:'.ics 파일 선택'}).click();
+    await (await phoneIcsChooserPromise).setFiles({name:'apple-calendar.ics',mimeType:'text/calendar',buffer:Buffer.from(appleIcs)});
+    await phone.getByText('이미 가져옴',{exact:true}).waitFor();
+    assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),false);
+    await phone.getByRole('button',{name:'ICS 가져오기 닫기'}).click();
+    await phone.goto(ORIGIN+'/',{waitUntil:'networkidle'});
     await phone.getByText('할 일 보드 보기').click();
     await phone.getByText('PC에서 만든 동기화 테스트',{exact:true}).first().waitFor({timeout:15000});
     assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),false);
     await phoneContext.close();
-    console.log('PASS second 390px device receives the same task');
+    console.log('PASS second 390px device receives the same task and ICS event without modal overflow');
 
     await page.goto(ORIGIN+'/account',{waitUntil:'networkidle'});
     await page.reload({waitUntil:'networkidle'});
